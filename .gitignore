@@ -1,3 +1,12 @@
+# idea config files
+.idea
+
+# Gradle cache
+.gradle
+
+# IDEA build
+build
+
 # Compiled class file
 *.class
 
