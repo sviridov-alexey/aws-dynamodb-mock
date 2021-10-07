@@ -41,28 +41,35 @@ class AWSDynamoDBMock : DynamoDbClient {
 }
 
 class AWSDynamoDBAsyncMock : DynamoDbAsyncClient {
-    override fun close() {
-        TODO("Not yet implemented")
+    private val dynamodbMock = AWSDynamoDBMock()
+
+    override fun close() = dynamodbMock.close()
+
+    override fun serviceName() = dynamodbMock.serviceName()
+
+    override fun createTable(
+        createTableRequest: Consumer<CreateTableRequest.Builder>
+    ): CompletableFuture<CreateTableResponse> = CompletableFuture.supplyAsync {
+        dynamodbMock.createTable(createTableRequest)
     }
 
-    override fun serviceName(): String {
-        TODO("Not yet implemented")
+    override fun createTable(
+        createTableRequest: CreateTableRequest
+    ): CompletableFuture<CreateTableResponse> = CompletableFuture.supplyAsync {
+        dynamodbMock.createTable(createTableRequest)
     }
 
-    override fun createTable(createTableRequest: Consumer<CreateTableRequest.Builder>): CompletableFuture<CreateTableResponse> {
-        TODO("Not yet implemented")
+    override fun putItem(
+        putItemRequest: Consumer<PutItemRequest.Builder>
+    ): CompletableFuture<PutItemResponse> = CompletableFuture.supplyAsync {
+        dynamodbMock.putItem(putItemRequest)
     }
 
-    override fun createTable(createTableRequest: CreateTableRequest): CompletableFuture<CreateTableResponse> {
-        TODO("Not yet implemented")
+    override fun putItem(
+        putItemRequest: PutItemRequest
+    ): CompletableFuture<PutItemResponse> = CompletableFuture.supplyAsync {
+        dynamodbMock.putItem(putItemRequest)
     }
-
-    override fun putItem(putItemRequest: Consumer<PutItemRequest.Builder>): CompletableFuture<PutItemResponse> {
-        TODO("Not yet implemented")
-    }
-
-    override fun putItem(putItemRequest: PutItemRequest): CompletableFuture<PutItemResponse> {
-        TODO("Not yet implemented")
-    }
+}
 
 }
