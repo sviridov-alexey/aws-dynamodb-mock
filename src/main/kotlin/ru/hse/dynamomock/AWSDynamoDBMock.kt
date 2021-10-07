@@ -17,13 +17,7 @@ class AWSDynamoDBMock : DynamoDbClient {
         TODO("Not yet implemented")
     }
 
-    override fun serviceName(): String {
-        TODO("Not yet implemented")
-    }
-
-    override fun createTable(createTableRequest: Consumer<CreateTableRequest.Builder>): CreateTableResponse {
-        TODO("Not yet implemented")
-    }
+    override fun serviceName(): String = SERVICE_NAME
 
     override fun createTable(createTableRequest: CreateTableRequest): CreateTableResponse {
         val description = dataStorageLayer.createTable(createTableRequest).toTableDescription()
@@ -41,6 +35,7 @@ class AWSDynamoDBMock : DynamoDbClient {
     }
 
     companion object {
+        private const val SERVICE_NAME = "dynamodb"
         private const val DATABASE_NAME = "testDB"
     }
 }
