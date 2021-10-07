@@ -2,6 +2,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 val logbackVersion: String by project
 val awsSDKVersion: String by project
+val hsqldbVersion: String by project
 val kotlinxSerializationVersion: String by project
 
 plugins {
@@ -20,6 +21,7 @@ repositories {
 dependencies {
     implementation("software.amazon.awssdk:dynamodb:$awsSDKVersion")
     implementation("ch.qos.logback:logback-classic:$logbackVersion")
+    implementation("org.hsqldb:hsqldb:$hsqldbVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$kotlinxSerializationVersion")
     testImplementation("org.jetbrains.kotlin:kotlin-test-testng:1.5.21")
 }
