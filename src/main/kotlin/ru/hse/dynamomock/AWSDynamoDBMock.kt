@@ -2,17 +2,17 @@
 
 package ru.hse.dynamomock
 
+import ru.hse.dynamomock.db.HSQLDBStorage
+import ru.hse.dynamomock.model.TableMetadata.Companion.toTableDescription
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
-import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest
-import software.amazon.awssdk.services.dynamodb.model.CreateTableResponse
-import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
-import software.amazon.awssdk.services.dynamodb.model.PutItemResponse
+import software.amazon.awssdk.services.dynamodb.model.*
 import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
 
-
 class AWSDynamoDBMock : DynamoDbClient {
+    private val dataStorageLayer by lazy { HSQLDBStorage(DATABASE_NAME) }
+
     override fun close() {
         TODO("Not yet implemented")
     }
@@ -26,7 +26,10 @@ class AWSDynamoDBMock : DynamoDbClient {
     }
 
     override fun createTable(createTableRequest: CreateTableRequest): CreateTableResponse {
-        TODO("Not yet implemented")
+        val description = dataStorageLayer.createTable(createTableRequest).toTableDescription()
+        return CreateTableResponse.builder()
+            .tableDescription(description)
+            .build()
     }
 
     override fun putItem(putItemRequest: Consumer<PutItemRequest.Builder>): PutItemResponse {
@@ -35,6 +38,10 @@ class AWSDynamoDBMock : DynamoDbClient {
 
     override fun putItem(putItemRequest: PutItemRequest): PutItemResponse {
         TODO("Not yet implemented")
+    }
+
+    companion object {
+        private const val DATABASE_NAME = "testDB"
     }
 }
 
