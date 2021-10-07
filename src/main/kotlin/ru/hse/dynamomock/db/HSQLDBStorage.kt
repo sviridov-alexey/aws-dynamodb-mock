@@ -1,8 +1,8 @@
 package ru.hse.dynamomock.db
 
+import ru.hse.dynamomock.db.util.SqlQuerier
 import ru.hse.dynamomock.model.TableMetadata
-import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest
-import software.amazon.awssdk.services.dynamodb.model.TableStatus
+import software.amazon.awssdk.services.dynamodb.model.*
 import java.sql.Connection
 import java.sql.DriverManager
 
@@ -12,7 +12,6 @@ class HSQLDBStorage(
     username: String = "sa",
     password: String = ""
 ): DataStorageLayer, AutoCloseable {
-
     private val connection: Connection = connect(dbname, username, password)
 
     override fun close() = connection.close()

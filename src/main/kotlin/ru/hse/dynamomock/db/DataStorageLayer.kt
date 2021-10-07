@@ -5,4 +5,6 @@ import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest
 
 interface DataStorageLayer {
     fun createTable(request: CreateTableRequest): TableMetadata
+
+    // TODO support other queries
 }
