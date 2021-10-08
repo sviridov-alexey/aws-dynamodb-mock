@@ -23,6 +23,7 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:$logbackVersion")
     implementation("org.hsqldb:hsqldb:$hsqldbVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$kotlinxSerializationVersion")
+    implementation("org.junit.jupiter:junit-jupiter:5.7.0")
     testImplementation("org.jetbrains.kotlin:kotlin-test-testng:1.5.21")
 }
 

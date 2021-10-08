@@ -12,6 +12,7 @@ import java.util.function.Consumer
 
 class AWSDynamoDBMock : DynamoDbClient {
     private val dataStorageLayer by lazy { HSQLDBStorage(DATABASE_NAME) }
+    private var description = TableDescription.builder().build()
 
     override fun close() {
         TODO("Not yet implemented")
@@ -20,7 +21,7 @@ class AWSDynamoDBMock : DynamoDbClient {
     override fun serviceName(): String = SERVICE_NAME
 
     override fun createTable(createTableRequest: CreateTableRequest): CreateTableResponse {
-        val description = dataStorageLayer.createTable(createTableRequest).toTableDescription()
+        description = dataStorageLayer.createTable(createTableRequest).toTableDescription()
         return CreateTableResponse.builder()
             .tableDescription(description)
             .build()
@@ -31,7 +32,17 @@ class AWSDynamoDBMock : DynamoDbClient {
     }
 
     override fun putItem(putItemRequest: PutItemRequest): PutItemResponse {
+        dataStorageLayer.putItem(putItemRequest)
+        return PutItemResponse.builder().build()
+    }
+
+    override fun getItem(getItemRequest: Consumer<GetItemRequest.Builder>): GetItemResponse {
         TODO("Not yet implemented")
+    }
+
+    override fun getItem(getItemRequest: GetItemRequest): GetItemResponse {
+        dataStorageLayer.getItem(getItemRequest, description)
+        return GetItemResponse.builder().build()
     }
 
     companion object {
