@@ -4,6 +4,7 @@ package ru.hse.dynamomock
 
 import ru.hse.dynamomock.db.HSQLDBStorage
 import ru.hse.dynamomock.model.TableMetadata.Companion.toTableDescription
+import ru.hse.dynamomock.service.HSQLDBService
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.*
@@ -12,7 +13,8 @@ import java.util.function.Consumer
 
 class AWSDynamoDBMock : DynamoDbClient {
     private val dataStorageLayer by lazy { HSQLDBStorage(DATABASE_NAME) }
-    private var description = TableDescription.builder().build()
+    private val tableDescriptions = mutableMapOf<String, TableDescription>()
+    private val service: HSQLDBService = HSQLDBService()
 
     override fun close() {
         TODO("Not yet implemented")
@@ -21,27 +23,20 @@ class AWSDynamoDBMock : DynamoDbClient {
     override fun serviceName(): String = SERVICE_NAME
 
     override fun createTable(createTableRequest: CreateTableRequest): CreateTableResponse {
-        description = dataStorageLayer.createTable(createTableRequest).toTableDescription()
+        val description: TableDescription = service.createTable(createTableRequest, dataStorageLayer).toTableDescription()
+        tableDescriptions[description.tableName()] = description
         return CreateTableResponse.builder()
             .tableDescription(description)
             .build()
     }
 
-    override fun putItem(putItemRequest: Consumer<PutItemRequest.Builder>): PutItemResponse {
-        TODO("Not yet implemented")
-    }
-
     override fun putItem(putItemRequest: PutItemRequest): PutItemResponse {
-        dataStorageLayer.putItem(putItemRequest)
+        service.putItem(putItemRequest, dataStorageLayer)
         return PutItemResponse.builder().build()
     }
 
-    override fun getItem(getItemRequest: Consumer<GetItemRequest.Builder>): GetItemResponse {
-        TODO("Not yet implemented")
-    }
-
     override fun getItem(getItemRequest: GetItemRequest): GetItemResponse {
-        dataStorageLayer.getItem(getItemRequest, description)
+        service.getItem(getItemRequest, dataStorageLayer)
         return GetItemResponse.builder().build()
     }
 
@@ -80,5 +75,17 @@ class AWSDynamoDBAsyncMock : DynamoDbAsyncClient {
         putItemRequest: PutItemRequest
     ): CompletableFuture<PutItemResponse> = CompletableFuture.supplyAsync {
         dynamodbMock.putItem(putItemRequest)
+    }
+
+    override fun getItem(
+        getItemRequest: Consumer<GetItemRequest.Builder>
+    ): CompletableFuture<GetItemResponse> = CompletableFuture.supplyAsync {
+        dynamodbMock.getItem(getItemRequest)
+    }
+
+    override fun getItem(
+        getItemRequest: GetItemRequest
+    ): CompletableFuture<GetItemResponse> = CompletableFuture.supplyAsync {
+        dynamodbMock.getItem(getItemRequest)
     }
 }
