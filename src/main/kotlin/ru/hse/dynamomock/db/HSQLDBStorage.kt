@@ -10,34 +10,39 @@ import java.sql.DriverManager
 
 @Suppress("unused")
 class HSQLDBStorage(
-    dbname: String,
-    username: String = "sa",
-    password: String = ""
-): DataStorageLayer, AutoCloseable {
-    private val connection: Connection = connect(dbname, username, password)
+    private val dbname: String,
+    private val username: String = "sa",
+    private val password: String = ""
+): DataStorageLayer {
+    private inline fun <T> runConnection(action: Connection.() -> T): T =
+        connect(dbname, username, password).use(action)
 
-    override fun close() = connection.close()
+    private inline fun <T> letConnection(action: (Connection) -> T): T =
+        runConnection(action)
 
     override fun createTable(tableMetadata: TableMetadata) {
         val createTableQuery = SqlQuerier.createTableQuery(tableMetadata)
-        connection.prepareStatement(createTableQuery).use { it.execute() }
-
+        runConnection { prepareStatement(createTableQuery).use { it.execute() } }
     }
 
     override fun putItem(request: HSQLDBPutItemRequest) {
         val putItemQuery = SqlQuerier.putItemQuery(request.tableName, request.itemsList)
-        connection.prepareStatement(putItemQuery).use { it.execute() }
+        runConnection { prepareStatement(putItemQuery).use { it.execute() } }
     }
 
     override fun getItem(request: HSQLDBGetItemRequest): GetItemResponse {
 
-        val getItemQuery = SqlQuerier.getItemQuery(request.tableName,
+        val getItemQuery = SqlQuerier.getItemQuery(
+            request.tableName,
             request.partitionKey,
-            request.attributesToGet)
-        connection.prepareStatement(getItemQuery).use {
-            val rs = it.executeQuery()
-            while (rs.next()) {
-                // TODO: crying in types
+            request.attributesToGet
+        )
+        runConnection {
+            prepareStatement(getItemQuery).use {
+                val rs = it.executeQuery()
+                while (rs.next()) {
+                    // TODO: crying in types
+                }
             }
         }
 
