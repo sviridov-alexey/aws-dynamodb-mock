@@ -1,19 +1,13 @@
 package ru.hse.dynamomock.service
 
-import ru.hse.dynamomock.db.HSQLDBStorage
+import ru.hse.dynamomock.db.DataStorageLayer
 import ru.hse.dynamomock.db.util.AttributeInfo
 import ru.hse.dynamomock.model.HSQLDBGetItemRequest
 import ru.hse.dynamomock.model.HSQLDBPutItemRequest
 import ru.hse.dynamomock.model.TableMetadata
-import software.amazon.awssdk.services.dynamodb.model.AttributeValue
-import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest
-import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
-import software.amazon.awssdk.services.dynamodb.model.GetItemResponse
-import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
-import software.amazon.awssdk.services.dynamodb.model.TableStatus
+import software.amazon.awssdk.services.dynamodb.model.*
 
-class HSQLDBService {
-
+class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     private fun convertAttributeValueToInfo(attributeName: String, attributeValue: AttributeValue): AttributeInfo {
         var type = ""
         var item: Any? = null
@@ -29,7 +23,7 @@ class HSQLDBService {
         return AttributeInfo(attributeName, type, item)
     }
 
-    fun createTable(request: CreateTableRequest, dataStorageLayer: HSQLDBStorage): TableMetadata {
+    fun createTable(request: CreateTableRequest): TableMetadata {
         val tableMetadata = TableMetadata(
             request.tableName(),
             request.attributeDefinitions(),
@@ -37,19 +31,19 @@ class HSQLDBService {
             TableStatus.ACTIVE
         )
 
-        dataStorageLayer.createTable(tableMetadata)
+        storage.createTable(tableMetadata)
         return tableMetadata
     }
-    fun putItem(request: PutItemRequest, dataStorageLayer: HSQLDBStorage) {
+    fun putItem(request: PutItemRequest) {
         val tableName = request.tableName()
         val itemsList = mutableListOf<AttributeInfo>()
         request.item().forEach{
             itemsList.add(convertAttributeValueToInfo(it.key, it.value))
         }
-        dataStorageLayer.putItem(HSQLDBPutItemRequest(tableName, itemsList))
+        storage.putItem(HSQLDBPutItemRequest(tableName, itemsList))
     }
 
-    fun getItem(request: GetItemRequest, dataStorageLayer: HSQLDBStorage): GetItemResponse {
+    fun getItem(request: GetItemRequest): GetItemResponse {
         val tableName = request.tableName()
         val keys = request.key()
         if (keys.size > 1) {
@@ -59,7 +53,7 @@ class HSQLDBService {
         val partitionKey = convertAttributeValueToInfo(keys.toList().first().first,
             keys.toList().first().second)
 
-        dataStorageLayer.getItem(HSQLDBGetItemRequest(tableName, partitionKey, request.attributesToGet()))
+        storage.getItem(HSQLDBGetItemRequest(tableName, partitionKey, request.attributesToGet()))
 
         return GetItemResponse.builder()
             .build()

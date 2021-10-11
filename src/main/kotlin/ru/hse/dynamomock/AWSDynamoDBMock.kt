@@ -4,7 +4,7 @@ package ru.hse.dynamomock
 
 import ru.hse.dynamomock.db.HSQLDBStorage
 import ru.hse.dynamomock.model.TableMetadata.Companion.toTableDescription
-import ru.hse.dynamomock.service.HSQLDBService
+import ru.hse.dynamomock.service.AWSDynamoDBMockService
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.*
@@ -12,9 +12,8 @@ import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
 
 class AWSDynamoDBMock : DynamoDbClient {
-    private val dataStorageLayer by lazy { HSQLDBStorage(DATABASE_NAME) }
     private val tableDescriptions = mutableMapOf<String, TableDescription>()
-    private val service: HSQLDBService = HSQLDBService()
+    private val service by lazy { AWSDynamoDBMockService(HSQLDBStorage(DATABASE_NAME)) }
 
     override fun close() {
         TODO("Not yet implemented")
@@ -23,7 +22,7 @@ class AWSDynamoDBMock : DynamoDbClient {
     override fun serviceName(): String = SERVICE_NAME
 
     override fun createTable(createTableRequest: CreateTableRequest): CreateTableResponse {
-        val description: TableDescription = service.createTable(createTableRequest, dataStorageLayer).toTableDescription()
+        val description: TableDescription = service.createTable(createTableRequest).toTableDescription()
         tableDescriptions[description.tableName()] = description
         return CreateTableResponse.builder()
             .tableDescription(description)
@@ -31,12 +30,12 @@ class AWSDynamoDBMock : DynamoDbClient {
     }
 
     override fun putItem(putItemRequest: PutItemRequest): PutItemResponse {
-        service.putItem(putItemRequest, dataStorageLayer)
+        service.putItem(putItemRequest)
         return PutItemResponse.builder().build()
     }
 
     override fun getItem(getItemRequest: GetItemRequest): GetItemResponse {
-        service.getItem(getItemRequest, dataStorageLayer)
+        service.getItem(getItemRequest)
         return GetItemResponse.builder().build()
     }
 
