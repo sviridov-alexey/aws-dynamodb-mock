@@ -1,5 +1,7 @@
 package ru.hse.dynamomock.db
 
+import ru.hse.dynamomock.db.TypesConverter.DEFAULT_TYPE
+import ru.hse.dynamomock.db.TypesConverter.fromDynamoToSqlType
 import ru.hse.dynamomock.model.AttributeInfo
 import ru.hse.dynamomock.model.HSQLDBGetItemRequest
 import ru.hse.dynamomock.model.HSQLDBPutItemRequest
@@ -61,18 +63,24 @@ class HSQLDBStorage(
 }
 
 private object SqlQuerier {
+    private const val ATTRIBUTES_COLUMN_NAME = "Attributes"
+    private const val PARTITION_COLUMN_NAME = "PartitionKey"
+    private const val SORT_COLUMN_NAME = "SortKey"
+
     fun createTableQuery(tableMetadata: TableMetadata): String {
         require(tableMetadata.attributeDefinitions.isNotEmpty())
-        val columns = tableMetadata.attributeDefinitions.joinToString(separator = ",") {
-            "${it.attributeName()} ${TypesConverter.fromDynamoToSqlType(it.attributeType().name)}"
+        val partitionKeyType = fromDynamoToSqlType(
+            tableMetadata.getAttribute(tableMetadata.partitionKey).attributeTypeAsString()
+        )
+        val sortKeyType = tableMetadata.sortKey?.let {
+            tableMetadata.getAttribute(it).attributeTypeAsString()
         }
-        val primaryKey = tableMetadata.partitionKey
 
-        //language=SQL
         return """
             CREATE TABLE ${tableMetadata.tableName} (
-                $columns
-                ${if (primaryKey.isNotEmpty()) ", PRIMARY KEY ($primaryKey)" else ""}
+                $ATTRIBUTES_COLUMN_NAME $DEFAULT_TYPE,
+                $PARTITION_COLUMN_NAME $partitionKeyType
+                ${sortKeyType?.let { ", $SORT_COLUMN_NAME $it" } ?: ""}
             )
         """
     }
@@ -85,7 +93,6 @@ private object SqlQuerier {
             values.add(it.attributeValue)
         }
 
-        //language=SQL
         return """
             INSERT INTO $tableName (${columnNames.joinToString(", ")})
             VALUES (${values.joinToString(", ") {when (it) {
@@ -98,7 +105,6 @@ private object SqlQuerier {
     }
 
     fun getItemQuery(tableName: String, partitionKey: AttributeInfo, attributesToGet: List<String>): String {
-        //language=SQL
         return """
             SELECT ${attributesToGet.joinToString(", ")} FROM $tableName
             WHERE ${partitionKey.attributeName}=${when (partitionKey.attributeValue) {
@@ -112,10 +118,10 @@ private object SqlQuerier {
 }
 
 object TypesConverter {
-    val defaultType = "varchar(100000)"
+    const val DEFAULT_TYPE = "varchar(100000)"
 
     fun fromDynamoToSqlType(type: String): String = when (type.lowercase()) {
         "n" -> "bigint" // TODO more general int type
-        else -> defaultType
+        else -> DEFAULT_TYPE
     }
 }

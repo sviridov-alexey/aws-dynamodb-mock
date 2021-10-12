@@ -5,12 +5,17 @@ import java.time.Instant
 
 data class TableMetadata(
     val tableName: String,
-    val attributeDefinitions: List<AttributeDefinition>,
+    val attributeDefinitions: List<AttributeDefinition>, // TODO store AttributeInfo
     val partitionKey: String,
     val sortKey: String?,
     val tableStatus: TableStatus,
     val creationDateTime: Instant = Instant.now()
 ) {
+    private val nameToAttributeDefinition: Map<String, AttributeDefinition> =
+        attributeDefinitions.associateBy { it.attributeName() }
+
+    fun getAttribute(name: String): AttributeDefinition = nameToAttributeDefinition.getValue(name)
+
     companion object {
         fun TableMetadata.toTableDescription(): TableDescription {
             // TODO supports other parameters
