@@ -1,7 +1,7 @@
 package ru.hse.dynamomock.service
 
 import ru.hse.dynamomock.db.DataStorageLayer
-import ru.hse.dynamomock.db.util.AttributeInfo
+import ru.hse.dynamomock.model.AttributeInfo
 import ru.hse.dynamomock.model.HSQLDBGetItemRequest
 import ru.hse.dynamomock.model.HSQLDBPutItemRequest
 import ru.hse.dynamomock.model.TableMetadata

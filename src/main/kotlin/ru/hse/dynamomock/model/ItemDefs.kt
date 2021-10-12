@@ -1,6 +1,6 @@
 package ru.hse.dynamomock.model
 
-import ru.hse.dynamomock.db.util.AttributeInfo
+import com.google.gson.Gson
 
 @Suppress("unused")
 data class DynamoItem(
@@ -21,3 +21,17 @@ data class HSQLDBGetItemRequest(
     val partitionKey: AttributeInfo,
     val attributesToGet: List<String>
 )
+
+data class AttributeInfo(
+    val attributeName: String,
+    val attributeType: String,
+    val attributeValue: Any?
+) {
+    companion object {
+        private val gson = Gson() // TODO make accessible for all structures (probably will be required)
+
+        fun AttributeInfo.toJson(): String = gson.toJson(this)
+
+        fun fromJson(json: String): AttributeInfo = gson.fromJson(json, AttributeInfo::class.java)
+    }
+}

@@ -1,6 +1,6 @@
 package ru.hse.dynamomock.db
 
-import ru.hse.dynamomock.db.util.AttributeInfo
+import ru.hse.dynamomock.model.AttributeInfo
 import ru.hse.dynamomock.model.HSQLDBGetItemRequest
 import ru.hse.dynamomock.model.HSQLDBPutItemRequest
 import ru.hse.dynamomock.model.TableMetadata
@@ -84,7 +84,7 @@ private object SqlQuerier {
         val values = mutableListOf<Any?>()
         items.forEach {
             columnNames.add(it.attributeName)
-            values.add(it.attribute)
+            values.add(it.attributeValue)
         }
 
         //language=SQL
@@ -103,11 +103,11 @@ private object SqlQuerier {
         //language=SQL
         return """
             SELECT ${attributesToGet.joinToString(", ")} FROM $tableName
-            WHERE ${partitionKey.attributeName}=${when (partitionKey.attribute) {
-            is String -> "'${partitionKey.attribute}'"
-            is Boolean -> "${partitionKey.attribute}"
+            WHERE ${partitionKey.attributeName}=${when (partitionKey.attributeValue) {
+            is String -> "'${partitionKey.attributeValue}'"
+            is Boolean -> "${partitionKey.attributeValue}"
             // TODO: other types
-            else -> "${partitionKey.attribute}"
+            else -> "${partitionKey.attributeValue}"
         }};
         """
     }

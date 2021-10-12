@@ -3,6 +3,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 val logbackVersion: String by project
 val awsSDKVersion: String by project
 val hsqldbVersion: String by project
+val gsonVersion: String by project
 val kotlinxSerializationVersion: String by project
 
 plugins {
@@ -23,6 +24,8 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:$logbackVersion")
     implementation("org.hsqldb:hsqldb:$hsqldbVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$kotlinxSerializationVersion")
+    implementation("com.google.code.gson:gson:$gsonVersion")
+
     implementation("org.junit.jupiter:junit-jupiter:5.7.0")
     testImplementation("org.jetbrains.kotlin:kotlin-test-testng:1.5.21")
 }
