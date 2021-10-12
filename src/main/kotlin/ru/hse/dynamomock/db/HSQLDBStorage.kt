@@ -66,9 +66,7 @@ private object SqlQuerier {
         val columns = tableMetadata.attributeDefinitions.joinToString(separator = ",") {
             "${it.attributeName()} ${TypesConverter.fromDynamoToSqlType(it.attributeType().name)}"
         }
-        val primaryKey = tableMetadata.keySchema.joinToString(separator = ",") {
-            it.attributeName()
-        }
+        val primaryKey = tableMetadata.partitionKey
 
         //language=SQL
         return """

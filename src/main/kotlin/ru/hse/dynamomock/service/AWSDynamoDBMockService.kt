@@ -5,9 +5,12 @@ import ru.hse.dynamomock.model.AttributeInfo
 import ru.hse.dynamomock.model.HSQLDBGetItemRequest
 import ru.hse.dynamomock.model.HSQLDBPutItemRequest
 import ru.hse.dynamomock.model.TableMetadata
+import ru.hse.dynamomock.model.TableMetadata.Companion.toTableMetadata
 import software.amazon.awssdk.services.dynamodb.model.*
 
 class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
+    private val nameToTableMetadata = mutableMapOf<String, TableMetadata>()
+
     private fun convertAttributeValueToInfo(attributeName: String, attributeValue: AttributeValue): AttributeInfo {
         var type = ""
         var item: Any? = null
@@ -24,16 +27,12 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     }
 
     fun createTable(request: CreateTableRequest): TableMetadata {
-        val tableMetadata = TableMetadata(
-            request.tableName(),
-            request.attributeDefinitions(),
-            request.keySchema(),
-            TableStatus.ACTIVE
-        )
-
-        storage.createTable(tableMetadata)
-        return tableMetadata
+        return request.toTableMetadata().also {
+            storage.createTable(it)
+            nameToTableMetadata[it.tableName] = it
+        }
     }
+
     fun putItem(request: PutItemRequest) {
         val tableName = request.tableName()
         val itemsList = mutableListOf<AttributeInfo>()

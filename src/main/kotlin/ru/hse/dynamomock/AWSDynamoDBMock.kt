@@ -12,7 +12,6 @@ import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
 
 class AWSDynamoDBMock : DynamoDbClient {
-    private val tableDescriptions = mutableMapOf<String, TableDescription>()
     private val service by lazy { AWSDynamoDBMockService(HSQLDBStorage(DATABASE_NAME)) }
 
     override fun close() {
@@ -23,7 +22,6 @@ class AWSDynamoDBMock : DynamoDbClient {
 
     override fun createTable(createTableRequest: CreateTableRequest): CreateTableResponse {
         val description: TableDescription = service.createTable(createTableRequest).toTableDescription()
-        tableDescriptions[description.tableName()] = description
         return CreateTableResponse.builder()
             .tableDescription(description)
             .build()
