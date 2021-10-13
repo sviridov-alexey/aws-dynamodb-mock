@@ -1,9 +1,12 @@
 package ru.hse.dynamomock.db
 
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import ru.hse.dynamomock.db.TypesConverter.DEFAULT_TYPE
 import ru.hse.dynamomock.db.TypesConverter.fromDynamoToSqlType
 import ru.hse.dynamomock.model.AttributeInfo
 import ru.hse.dynamomock.model.HSQLDBGetItemRequest
+import ru.hse.dynamomock.model.HSQLDBGetItemResponse
 import ru.hse.dynamomock.model.HSQLDBPutItemRequest
 import ru.hse.dynamomock.model.TableMetadata
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse
@@ -28,28 +31,25 @@ class HSQLDBStorage(
     }
 
     override fun putItem(request: HSQLDBPutItemRequest) {
-        val putItemQuery = SqlQuerier.putItemQuery(request.tableName, request.itemsList)
+        val putItemQuery = SqlQuerier.putItemQuery(request)
         runConnection { prepareStatement(putItemQuery).use { it.execute() } }
     }
 
-    override fun getItem(request: HSQLDBGetItemRequest): GetItemResponse {
+    override fun getItem(request: HSQLDBGetItemRequest): HSQLDBGetItemResponse? {
 
-        val getItemQuery = SqlQuerier.getItemQuery(
-            request.tableName,
-            request.partitionKey,
-            request.attributesToGet
-        )
+        val getItemQuery = SqlQuerier.getItemQuery(request)
+
         runConnection {
             prepareStatement(getItemQuery).use {
                 val rs = it.executeQuery()
-                while (rs.next()) {
-                    // TODO: crying in types
+                if (rs.next()) {
+                    val jsonValue = rs.getString(SqlQuerier.ATTRIBUTES_COLUMN_NAME)
+                    val obj = Json.decodeFromString<List<AttributeInfo>>(jsonValue)
+                    return HSQLDBGetItemResponse(obj)
                 }
             }
         }
-
-        return GetItemResponse.builder()
-            .build()
+        return null
     }
 
     companion object {
@@ -63,7 +63,7 @@ class HSQLDBStorage(
 }
 
 private object SqlQuerier {
-    private const val ATTRIBUTES_COLUMN_NAME = "Attributes"
+    const val ATTRIBUTES_COLUMN_NAME = "Attributes"
     private const val PARTITION_COLUMN_NAME = "PartitionKey"
     private const val SORT_COLUMN_NAME = "SortKey"
 
@@ -85,35 +85,31 @@ private object SqlQuerier {
         """
     }
 
-    fun putItemQuery(tableName: String, items: List<AttributeInfo>): String {
-        val columnNames = mutableListOf<String>()
-        val values = mutableListOf<Any?>()
-        items.forEach {
-            columnNames.add(it.attributeName)
-            values.add(it.attributeValue)
-        }
-
+    fun putItemQuery(request: HSQLDBPutItemRequest): String {
         return """
-            INSERT INTO $tableName (${columnNames.joinToString(", ")})
-            VALUES (${values.joinToString(", ") {when (it) {
-            is String -> "'$it'"
-            is Boolean -> "$it"
-            // TODO: is Number, but in dynamo number is string too (float?? int???)
-            else -> "$it"
-        }}});
+            INSERT INTO ${request.tableName}
+            VALUES '${request.items}',
+            ${when(request.partitionKey.attributeType.lowercase()) {
+                        "n" -> "${request.partitionKey.attributeValue.toString().toBigDecimal()}"
+                        else -> "'${request.partitionKey.attributeValue.toString()}'" 
+              }            
+            }
+        ${request.sortKey?.let { ", ${when(request.sortKey.attributeType) {
+            "n" -> "${request.sortKey.attributeValue.toString().toBigDecimal()}"
+            else -> "'${request.sortKey.attributeValue.toString()}'"
+        }
+        }"} ?: ""};
         """
     }
 
-    fun getItemQuery(tableName: String, partitionKey: AttributeInfo, attributesToGet: List<String>): String {
+    fun getItemQuery(request: HSQLDBGetItemRequest): String {
         return """
-            SELECT ${attributesToGet.joinToString(", ")} FROM $tableName
-            WHERE ${partitionKey.attributeName}=${when (partitionKey.attributeValue) {
-            is String -> "'${partitionKey.attributeValue}'"
-            is Boolean -> "${partitionKey.attributeValue}"
-            // TODO: other types
-            else -> "${partitionKey.attributeValue}"
-        }};
-        """
+             SELECT $ATTRIBUTES_COLUMN_NAME FROM ${request.tableName}
+             WHERE $PARTITION_COLUMN_NAME=${when (request.partitionKey.attributeType) {
+                 "n" -> "${request.partitionKey.attributeValue.toString().toBigDecimal()}"
+                 else -> "'${request.partitionKey.attributeValue.toString()}'"
+            }}
+        """.trimIndent()
     }
 }
 
@@ -124,4 +120,5 @@ object TypesConverter {
         "n" -> "bigint" // TODO more general int type
         else -> DEFAULT_TYPE
     }
+
 }

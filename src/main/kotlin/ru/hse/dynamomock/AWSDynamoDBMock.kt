@@ -33,8 +33,7 @@ class AWSDynamoDBMock : DynamoDbClient {
     }
 
     override fun getItem(getItemRequest: GetItemRequest): GetItemResponse {
-        service.getItem(getItemRequest)
-        return GetItemResponse.builder().build()
+        return service.getItem(getItemRequest)
     }
 
     companion object {

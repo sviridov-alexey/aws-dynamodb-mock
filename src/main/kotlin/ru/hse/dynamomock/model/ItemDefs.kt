@@ -1,6 +1,6 @@
 package ru.hse.dynamomock.model
 
-import com.google.gson.Gson
+import kotlinx.serialization.Serializable
 
 @Suppress("unused")
 data class DynamoItem(
@@ -13,25 +13,32 @@ data class DynamoItem(
 
 data class HSQLDBPutItemRequest(
     val tableName: String,
-    val itemsList: List<AttributeInfo>
+    val partitionKey: Key,
+    val sortKey: Key?,
+    val items: String
 )
 
 data class HSQLDBGetItemRequest(
     val tableName: String,
-    val partitionKey: AttributeInfo,
+    val partitionKey: Key,
+    val sortKey: Key?,
     val attributesToGet: List<String>
 )
 
+data class HSQLDBGetItemResponse(
+    val items: List<AttributeInfo>
+)
+
+
+@Serializable
 data class AttributeInfo(
     val attributeName: String,
     val attributeType: String,
+    val attributeValue: String
+)
+
+data class Key(
+    val attributeName: String,
+    val attributeType: String,
     val attributeValue: Any?
-) {
-    companion object {
-        private val gson = Gson() // TODO make accessible for all structures (probably will be required)
-
-        fun AttributeInfo.toJson(): String = gson.toJson(this)
-
-        fun fromJson(json: String): AttributeInfo = gson.fromJson(json, AttributeInfo::class.java)
-    }
-}
+)
