@@ -138,7 +138,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                 .build()
 
         val item = mutableMapOf<String, AttributeValue>()
-        response.items.forEach {
+        response.items.filter { request.attributesToGet().contains(it.attributeName)}.forEach {
             val (name, value) = convertAttributeInfoToValue(it)
             item[name] = value
         }

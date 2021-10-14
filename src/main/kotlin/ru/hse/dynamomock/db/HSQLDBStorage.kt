@@ -4,12 +4,13 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import ru.hse.dynamomock.db.TypesConverter.DEFAULT_TYPE
 import ru.hse.dynamomock.db.TypesConverter.fromDynamoToSqlType
+import ru.hse.dynamomock.db.TypesConverter.fromDynamoToValue
 import ru.hse.dynamomock.model.AttributeInfo
 import ru.hse.dynamomock.model.HSQLDBGetItemRequest
 import ru.hse.dynamomock.model.HSQLDBGetItemResponse
 import ru.hse.dynamomock.model.HSQLDBPutItemRequest
+import ru.hse.dynamomock.model.Key
 import ru.hse.dynamomock.model.TableMetadata
-import software.amazon.awssdk.services.dynamodb.model.GetItemResponse
 import java.sql.Connection
 import java.sql.DriverManager
 
@@ -89,26 +90,16 @@ private object SqlQuerier {
         return """
             INSERT INTO ${request.tableName}
             VALUES '${request.items}',
-            ${when(request.partitionKey.attributeType.lowercase()) {
-                        "n" -> "${request.partitionKey.attributeValue.toString().toBigDecimal()}"
-                        else -> "'${request.partitionKey.attributeValue.toString()}'" 
-              }            
-            }
-        ${request.sortKey?.let { ", ${when(request.sortKey.attributeType) {
-            "n" -> "${request.sortKey.attributeValue.toString().toBigDecimal()}"
-            else -> "'${request.sortKey.attributeValue.toString()}'"
-        }
-        }"} ?: ""};
+            ${fromDynamoToValue(request.partitionKey)}
+        ${request.sortKey?.let { ", ${
+            fromDynamoToValue(request.sortKey)}"} ?: ""};
         """
     }
 
     fun getItemQuery(request: HSQLDBGetItemRequest): String {
         return """
              SELECT $ATTRIBUTES_COLUMN_NAME FROM ${request.tableName}
-             WHERE $PARTITION_COLUMN_NAME=${when (request.partitionKey.attributeType) {
-                 "n" -> "${request.partitionKey.attributeValue.toString().toBigDecimal()}"
-                 else -> "'${request.partitionKey.attributeValue.toString()}'"
-            }}
+             WHERE $PARTITION_COLUMN_NAME=${fromDynamoToValue(request.partitionKey)}
         """.trimIndent()
     }
 }
@@ -119,6 +110,11 @@ object TypesConverter {
     fun fromDynamoToSqlType(type: String): String = when (type.lowercase()) {
         "n" -> "bigint" // TODO more general int type
         else -> DEFAULT_TYPE
+    }
+
+    fun fromDynamoToValue(key: Key): Any = when (key.attributeType.lowercase()) {
+        "n" -> "${key.attributeValue.toString().toBigDecimal()}"
+        else -> "'${key.attributeValue.toString()}'"
     }
 
 }
