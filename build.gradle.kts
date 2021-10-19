@@ -2,7 +2,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 val logbackVersion: String by project
 val awsSDKVersion: String by project
-val hsqldbVersion: String by project
+val h2dbVersion: String by project
 val exposedVersion: String by project
 val gsonVersion: String by project
 val kotlinxSerializationVersion: String by project
@@ -23,7 +23,7 @@ repositories {
 dependencies {
     implementation("software.amazon.awssdk:dynamodb:$awsSDKVersion")
     implementation("ch.qos.logback:logback-classic:$logbackVersion")
-    implementation("org.hsqldb:hsqldb:$hsqldbVersion")
+    implementation("com.h2database:h2:$h2dbVersion")
     implementation("org.jetbrains.exposed:exposed-core:$exposedVersion")
     implementation("org.jetbrains.exposed:exposed-dao:$exposedVersion")
     implementation("org.jetbrains.exposed:exposed-jdbc:$exposedVersion")
