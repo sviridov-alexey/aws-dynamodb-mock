@@ -2,7 +2,7 @@
 
 package ru.hse.dynamomock
 
-import ru.hse.dynamomock.db.HSQLDBStorage
+import ru.hse.dynamomock.db.H2DBStorage
 import ru.hse.dynamomock.model.TableMetadata.Companion.toTableDescription
 import ru.hse.dynamomock.service.AWSDynamoDBMockService
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
@@ -12,7 +12,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
 
 class AWSDynamoDBMock : DynamoDbClient {
-    private val service by lazy { AWSDynamoDBMockService(HSQLDBStorage(DATABASE_NAME)) }
+    private val service by lazy { AWSDynamoDBMockService(H2DBStorage(DATABASE_NAME)) }
 
     override fun close() {
         TODO("Not yet implemented")

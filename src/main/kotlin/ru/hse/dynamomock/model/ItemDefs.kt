@@ -11,17 +11,17 @@ data class DynamoItem(
     Dynamo Item definition goes here */
 )
 
-data class HSQLDBPutItemRequest(
+data class DBPutItemRequest(
     val tableName: String,
-    val partitionKey: Key,
-    val sortKey: Key?,
+    val partitionKey: Any,
+    val sortKey: Any?,
     val items: String
 )
 
-data class HSQLDBGetItemRequest(
+data class DBGetItemRequest(
     val tableName: String,
-    val partitionKey: Key,
-    val sortKey: Key?,
+    val partitionKey: Any,
+    val sortKey: Any?,
     val attributesToGet: List<String>
 )
 
@@ -35,10 +35,4 @@ data class AttributeInfo(
     val attributeName: String,
     val attributeType: String,
     val attributeValue: String
-)
-
-data class Key(
-    val attributeName: String,
-    val attributeType: String,
-    val attributeValue: Any?
 )
