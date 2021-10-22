@@ -6,12 +6,12 @@ import ru.hse.dynamomock.model.*
 import java.math.BigDecimal
 
 @Suppress("unused")
-class H2DBStorage(
+class ExposedStorage(
     dbname: String,
     username: String = "sa",
     password: String = ""
 ) : DataStorageLayer {
-    private val database = Database.connect("jdbc:h2:mem:$dbname", "org.h2.driver", username, password)
+    private val database = Database.connect("jdbc:h2:mem:$dbname;DB_CLOSE_DELAY=-1", "org.h2.Driver", username, password)
     private val tables = mutableMapOf<String, DynamoTable>()
 
     override fun createTable(tableMetadata: TableMetadata) = transaction(database) {
@@ -49,13 +49,13 @@ class H2DBStorage(
 class DynamoTable(metadata: TableMetadata) : Table(metadata.tableName) {
     private val id = integer("id").autoIncrement()
     val attributes: Column<String> = text("attributes")
-    val stringPartitionKey: Column<String> = text("stringPartitionKey")
-    val numPartitionKey: Column<BigDecimal> = decimal("numPartitionKey", 20, 0)
+    val stringPartitionKey: Column<String?> = text("stringPartitionKey").nullable().default(null)
+    val numPartitionKey: Column<BigDecimal?> = decimal("numPartitionKey", 20, 0).nullable().default(null)
     val stringSortKey: Column<String?> = text("stringSortKey").nullable().default(null)
     val numSortKey: Column<BigDecimal?> = decimal("numSortKey", 20, 0).nullable().default(null)
 
     override val primaryKey: PrimaryKey = PrimaryKey(id)
-    init {
-        index(true, stringPartitionKey, numPartitionKey)
-    }
+    // init {
+    //     index(true, stringPartitionKey, numPartitionKey)
+    // }
 }
