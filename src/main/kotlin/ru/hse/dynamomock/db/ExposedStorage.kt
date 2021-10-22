@@ -55,7 +55,4 @@ class DynamoTable(metadata: TableMetadata) : Table(metadata.tableName) {
     val numSortKey: Column<BigDecimal?> = decimal("numSortKey", 20, 0).nullable().default(null)
 
     override val primaryKey: PrimaryKey = PrimaryKey(id)
-    // init {
-    //     index(true, stringPartitionKey, numPartitionKey)
-    // }
 }
