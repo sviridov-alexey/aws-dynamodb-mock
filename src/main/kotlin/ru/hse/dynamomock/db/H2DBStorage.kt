@@ -3,6 +3,7 @@ package ru.hse.dynamomock.db
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import ru.hse.dynamomock.model.*
+import java.math.BigDecimal
 
 @Suppress("unused")
 class H2DBStorage(
@@ -19,13 +20,26 @@ class H2DBStorage(
         SchemaUtils.create(table)
     }
 
-    override fun putItem(request: DBPutItemRequest) = transaction(database) {
-        val table = tables[request.tableName] ?: throw NullPointerException("table not found")
+    override fun putItem(request: DBPutItemRequest) {
+        transaction(database) {
+            val table = tables[request.tableName] ?: throw NullPointerException("table not found")
 
-        table.insert{ item ->
-            item[attributes] = request.items
-            item[partitionKey] = request.partitionKey
-            request.sortKey?.let { item[sortKey] = request.sortKey}
+            table.insert { item ->
+                item[attributes] = request.items
+                if (request.partitionKey.attributeType == "n") {
+                    item[numPartitionKey] = request.partitionKey.attributeValue.toString().toBigDecimal()
+                } else {
+                    item[stringPartitionKey] = request.partitionKey.attributeValue.toString()
+                }
+
+                if (request.sortKey != null) {
+                    if (request.sortKey.attributeType == "n") {
+                        item[numSortKey] = request.sortKey.attributeValue.toString().toBigDecimal()
+                    } else {
+                        item[stringSortKey] = request.sortKey.attributeValue.toString()
+                    }
+                }
+            }
         }
     }
 
@@ -33,17 +47,21 @@ class H2DBStorage(
 }
 
 class DynamoTable(private val metadata: TableMetadata) : Table(metadata.tableName) {
+    private val id = integer("id").autoIncrement()
     val attributes: Column<String> = text("attributes")
-    val partitionKey: Column<*> = registerColumn("partitionKey", metadata.partitionKey)
-    val sortKey: Column<*> = metadata.sortKey?.let {
-        registerColumn("sortKey", it)
-    } ?: text("sortKey").nullable().default(null)
+    val stringPartitionKey: Column<String> = text("stringPartitionKey")
+    val numPartitionKey: Column<BigDecimal> = decimal("numPartitionKey", 20, 0)
+    val stringSortKey: Column<String?> = text("stringSortKey").nullable().default(null)
+    val numSortKey: Column<BigDecimal?> = decimal("numSortKey", 20, 0).nullable().default(null)
 
-    override val primaryKey: PrimaryKey = PrimaryKey(partitionKey)
-
-    private fun registerColumn(columnName: String, attributeName: String): Column<*> =
-        when (metadata.getAttribute(attributeName).attributeTypeAsString()) {
-            "n" -> decimal(columnName, 20, 0)
-            else -> text(columnName)
-        }
+    override val primaryKey: PrimaryKey = PrimaryKey(id)
+    init {
+        index(true, stringPartitionKey, numPartitionKey)
+    }
+    //
+    // private fun registerColumn(columnName: String, attributeName: String): Column<Any> =
+    //     when (metadata.getAttribute(attributeName).attributeTypeAsString()) {
+    //         "n" -> decimal(columnName, 20, 0)
+    //         else -> text(columnName)
+    //     }
 }

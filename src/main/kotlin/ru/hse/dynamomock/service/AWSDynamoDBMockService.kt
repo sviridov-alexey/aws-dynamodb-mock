@@ -6,6 +6,7 @@ import ru.hse.dynamomock.db.DataStorageLayer
 import ru.hse.dynamomock.model.AttributeInfo
 import ru.hse.dynamomock.model.DBGetItemRequest
 import ru.hse.dynamomock.model.DBPutItemRequest
+import ru.hse.dynamomock.model.Key
 import ru.hse.dynamomock.model.TableMetadata
 import ru.hse.dynamomock.model.TableMetadata.Companion.toTableMetadata
 import software.amazon.awssdk.services.dynamodb.model.*
@@ -80,21 +81,24 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             ?: // TODO: angry dynamodb error message
             return
 
-        val (_, partitionKey) = convertAttributeValueToInfo(partitionKeyAttributeValue)
-        if (partitionKey == null) {
+        val (partitionKeyType, partitionKeyValue) = convertAttributeValueToInfo(partitionKeyAttributeValue)
+
+        if (partitionKeyValue == null) {
             // TODO: angry dynamodb error message
             return
         }
+        val partitionKey = Key(partitionKeyName, partitionKeyType, partitionKeyValue)
 
         request.item().forEach{
             val (type, value) = convertAttributeValueToInfo(it.value)
             itemsList.add(AttributeInfo(it.key, type, value.toString()))
         }
 
-        val (_, sortKey) = if (sortKeyName != null) {
+        val sortKey = if (sortKeyName != null) {
             val sortKeyAttributeValue = request.item()[tableMetadata.sortKey]
-            convertAttributeValueToInfo(sortKeyAttributeValue)
-        } else Pair(null, null)
+            val (sortKeyType, sortKeyValue) = convertAttributeValueToInfo(sortKeyAttributeValue)
+            Key(sortKeyName, sortKeyType, sortKeyValue)
+        } else null
 
         storage.putItem(DBPutItemRequest(tableName, partitionKey, sortKey, Json.encodeToString(itemsList) ))
     }

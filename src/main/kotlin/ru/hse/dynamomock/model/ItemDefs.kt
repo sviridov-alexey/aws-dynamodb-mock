@@ -13,8 +13,8 @@ data class DynamoItem(
 
 data class DBPutItemRequest(
     val tableName: String,
-    val partitionKey: Any,
-    val sortKey: Any?,
+    val partitionKey: Key,
+    val sortKey: Key?,
     val items: String
 )
 
@@ -29,10 +29,15 @@ data class HSQLDBGetItemResponse(
     val items: List<AttributeInfo>
 )
 
-
 @Serializable
 data class AttributeInfo(
     val attributeName: String,
     val attributeType: String,
     val attributeValue: String
+)
+
+data class Key(
+    val attributeName: String,
+    val attributeType: String,
+    val attributeValue: Any?
 )
