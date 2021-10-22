@@ -46,7 +46,7 @@ class H2DBStorage(
     override fun getItem(request: DBGetItemRequest): HSQLDBGetItemResponse? = TODO()
 }
 
-class DynamoTable(private val metadata: TableMetadata) : Table(metadata.tableName) {
+class DynamoTable(metadata: TableMetadata) : Table(metadata.tableName) {
     private val id = integer("id").autoIncrement()
     val attributes: Column<String> = text("attributes")
     val stringPartitionKey: Column<String> = text("stringPartitionKey")
@@ -58,10 +58,4 @@ class DynamoTable(private val metadata: TableMetadata) : Table(metadata.tableNam
     init {
         index(true, stringPartitionKey, numPartitionKey)
     }
-    //
-    // private fun registerColumn(columnName: String, attributeName: String): Column<Any> =
-    //     when (metadata.getAttribute(attributeName).attributeTypeAsString()) {
-    //         "n" -> decimal(columnName, 20, 0)
-    //         else -> text(columnName)
-    //     }
 }
