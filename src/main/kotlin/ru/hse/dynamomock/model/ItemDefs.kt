@@ -15,17 +15,17 @@ data class DBPutItemRequest(
     val tableName: String,
     val partitionKey: Key,
     val sortKey: Key?,
-    val items: String
+    val items: List<AttributeInfo>
 )
 
 data class DBGetItemRequest(
     val tableName: String,
-    val partitionKey: Any,
-    val sortKey: Any?,
+    val partitionKey: Key,
+    val sortKey: Key?,
     val attributesToGet: List<String>
 )
 
-data class HSQLDBGetItemResponse(
+data class DBGetItemResponse(
     val items: List<AttributeInfo>
 )
 

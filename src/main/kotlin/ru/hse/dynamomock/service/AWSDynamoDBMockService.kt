@@ -100,7 +100,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             Key(sortKeyName, sortKeyType, sortKeyValue)
         } else null
 
-        storage.putItem(DBPutItemRequest(tableName, partitionKey, sortKey, Json.encodeToString(itemsList) ))
+        storage.putItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
     }
 
     fun getItem(request: GetItemRequest): GetItemResponse {
@@ -113,23 +113,23 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             ?: // TODO: angry dynamodb error message
             return GetItemResponse.builder().build()
 
-        val (partitionKeyType, partitionKey) = convertAttributeValueToInfo(partitionKeyAttributeValue)
-        if (partitionKey == null) {
+        val (partitionKeyType, partitionKeyValue) = convertAttributeValueToInfo(partitionKeyAttributeValue)
+        if (partitionKeyValue == null) {
             // TODO: angry dynamodb error message
             return GetItemResponse.builder().build()
         }
+        val partitionKey = Key(partitionKeyName, partitionKeyType, partitionKeyValue)
 
-        val (_, sortKey) = if (sortKeyName != null) {
+        val sortKey = if (sortKeyName != null) {
             val sortKeyAttributeValue = request.key()[tableMetadata.sortKey]
-            convertAttributeValueToInfo(sortKeyAttributeValue)
-        } else Pair(null, null)
+            val (sortKeyType, sortKeyValue) = convertAttributeValueToInfo(sortKeyAttributeValue)
+            Key(sortKeyName, sortKeyType, sortKeyValue)
+        } else null
 
         val response = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey, request.attributesToGet()))
-            ?: return GetItemResponse.builder()
-                .build()
 
         val item = mutableMapOf<String, AttributeValue>()
-        response.items.filter { request.attributesToGet().contains(it.attributeName)}.forEach {
+        response.filter { request.attributesToGet().contains(it.attributeName)}.forEach {
             val (name, value) = convertAttributeInfoToValue(it)
             item[name] = value
         }
