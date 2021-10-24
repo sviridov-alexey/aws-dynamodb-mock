@@ -18,9 +18,19 @@ class ExposedStorage(
     private val tables = mutableMapOf<String, DynamoTable>()
 
     override fun createTable(tableMetadata: TableMetadata) = transaction(database) {
+        require(tableMetadata.tableName !in tables) {
+            "Table ${tableMetadata.tableName} already exists. Cannot create."
+        }
         val table = DynamoTable(tableMetadata)
         tables[tableMetadata.tableName] = table
         SchemaUtils.create(table)
+    }
+
+    override fun deleteTable(tableName: String) = transaction {
+        require(tableName in tables) {
+            "Cannot delete non-existent table."
+        }
+        SchemaUtils.drop(tables.remove(tableName)!!)
     }
 
     override fun putItem(request: DBPutItemRequest) {

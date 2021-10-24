@@ -5,7 +5,7 @@ import ru.hse.dynamomock.model.*
 import software.amazon.awssdk.services.dynamodb.model.*
 
 class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
-    private val nameToTableMetadata = mutableMapOf<String, TableMetadata>()
+    private val tablesMetadata = mutableMapOf<String, TableMetadata>()
 
     private fun convertAttributeValueToInfo(attributeValue: AttributeValue): Pair<String?, Any?> =
         if (attributeValue.bool() != null) {
@@ -42,16 +42,25 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         }
     }
 
-    fun createTable(request: CreateTableRequest): TableMetadata {
+    fun createTable(request: CreateTableRequest): TableDescription {
         return request.toTableMetadata().also {
             storage.createTable(it)
-            nameToTableMetadata[it.tableName] = it
+            tablesMetadata[it.tableName] = it
+        }.toTableDescription()
+    }
+
+    fun deleteTable(request: DeleteTableRequest): TableDescription {
+        val name = request.tableName()
+        require(name in tablesMetadata) {
+            "Cannot delete non-existent table."
         }
+        storage.deleteTable(name)
+        return tablesMetadata.remove(name)!!.toTableDescription()
     }
 
     fun putItem(request: PutItemRequest) {
         val tableName = request.tableName()
-        val tableMetadata = nameToTableMetadata[tableName]
+        val tableMetadata = tablesMetadata[tableName]
 
         val partitionKeyName = tableMetadata?.partitionKey ?: return
         val sortKeyName = tableMetadata.sortKey
@@ -96,7 +105,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
     fun getItem(request: GetItemRequest): GetItemResponse {
         val tableName = request.tableName()
-        val tableMetadata = nameToTableMetadata[tableName]
+        val tableMetadata = tablesMetadata[tableName]
         val partitionKeyName = tableMetadata?.partitionKey ?: return GetItemResponse.builder().build()
         val sortKeyName = tableMetadata.sortKey
 

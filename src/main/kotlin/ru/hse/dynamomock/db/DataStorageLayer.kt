@@ -9,6 +9,8 @@ import ru.hse.dynamomock.model.TableMetadata
 interface DataStorageLayer {
     fun createTable(tableMetadata: TableMetadata)
 
+    fun deleteTable(tableName: String)
+
     fun putItem(request: DBPutItemRequest)
 
     fun getItem(request: DBGetItemRequest): List<AttributeInfo>

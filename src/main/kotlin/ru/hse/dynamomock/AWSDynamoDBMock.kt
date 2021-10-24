@@ -3,7 +3,6 @@
 package ru.hse.dynamomock
 
 import ru.hse.dynamomock.db.ExposedStorage
-import ru.hse.dynamomock.model.toTableDescription
 import ru.hse.dynamomock.service.AWSDynamoDBMockService
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.*
@@ -18,8 +17,15 @@ class AWSDynamoDBMock : DynamoDbClient {
     override fun serviceName(): String = SERVICE_NAME
 
     override fun createTable(createTableRequest: CreateTableRequest): CreateTableResponse {
-        val description = service.createTable(createTableRequest).toTableDescription()
+        val description = service.createTable(createTableRequest)
         return CreateTableResponse.builder()
+            .tableDescription(description)
+            .build()
+    }
+
+    override fun deleteTable(deleteTableRequest: DeleteTableRequest): DeleteTableResponse {
+        val description = service.deleteTable(deleteTableRequest)
+        return DeleteTableResponse.builder()
             .tableDescription(description)
             .build()
     }
