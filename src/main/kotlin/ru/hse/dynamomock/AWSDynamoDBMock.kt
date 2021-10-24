@@ -3,13 +3,10 @@
 package ru.hse.dynamomock
 
 import ru.hse.dynamomock.db.ExposedStorage
-import ru.hse.dynamomock.model.TableMetadata.Companion.toTableDescription
+import ru.hse.dynamomock.model.toTableDescription
 import ru.hse.dynamomock.service.AWSDynamoDBMockService
-import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.*
-import java.util.concurrent.CompletableFuture
-import java.util.function.Consumer
 
 class AWSDynamoDBMock : DynamoDbClient {
     private val service by lazy { AWSDynamoDBMockService(ExposedStorage(DATABASE_NAME)) }
@@ -21,7 +18,7 @@ class AWSDynamoDBMock : DynamoDbClient {
     override fun serviceName(): String = SERVICE_NAME
 
     override fun createTable(createTableRequest: CreateTableRequest): CreateTableResponse {
-        val description: TableDescription = service.createTable(createTableRequest).toTableDescription()
+        val description = service.createTable(createTableRequest).toTableDescription()
         return CreateTableResponse.builder()
             .tableDescription(description)
             .build()

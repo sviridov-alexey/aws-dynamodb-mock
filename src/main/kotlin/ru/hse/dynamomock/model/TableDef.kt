@@ -10,40 +10,38 @@ data class TableMetadata(
     val sortKey: String?,
     val tableStatus: TableStatus,
     val creationDateTime: Instant = Instant.now()
-) {
-    private val nameToAttributeDefinition: Map<String, AttributeDefinition> =
-        attributeDefinitions.associateBy { it.attributeName() }
+)
 
-    fun getAttribute(name: String): AttributeDefinition = nameToAttributeDefinition.getValue(name)
-
-    companion object {
-        fun TableMetadata.toTableDescription(): TableDescription {
-            // TODO supports other parameters
-            return TableDescription.builder()
-                .tableName(tableName)
-                .attributeDefinitions(attributeDefinitions)
-                .keySchema(listOfNotNull(partitionKey.toKey(KeyType.HASH), sortKey?.toKey(KeyType.RANGE)))
-                .tableStatus(tableStatus)
-                .creationDateTime(creationDateTime)
-                .build()
-        }
-
-        fun CreateTableRequest.toTableMetadata(): TableMetadata = TableMetadata(
-            tableName(),
-            attributeDefinitions(),
-            keySchema().partitionKey,
-            keySchema().sortKey,
-            TableStatus.ACTIVE
-        )
-
-        private val KeySchemaElement.isPartition get(): Boolean = keyType() === KeyType.HASH
-        private val KeySchemaElement.isSort get(): Boolean = keyType() === KeyType.RANGE
-        private val List<KeySchemaElement>.partitionKey get(): String = first { it.isPartition }.attributeName()
-        private val List<KeySchemaElement>.sortKey get(): String? = firstOrNull { it.isSort }?.attributeName()
-
-        private fun String.toKey(keyType: KeyType): KeySchemaElement = KeySchemaElement.builder()
-            .attributeName(this)
-            .keyType(keyType)
-            .build()
-    }
+fun TableMetadata.toTableDescription(): TableDescription {
+    // TODO supports other parameters
+    return TableDescription.builder()
+        .tableName(tableName)
+        .attributeDefinitions(attributeDefinitions)
+        .keySchema(listOfNotNull(
+            nameToKeySchemaElement(partitionKey, KeyType.HASH),
+            sortKey?.let { nameToKeySchemaElement(it, KeyType.RANGE) }
+        ))
+        .tableStatus(tableStatus)
+        .creationDateTime(creationDateTime)
+        .build()
 }
+
+fun CreateTableRequest.toTableMetadata(): TableMetadata = TableMetadata(
+    tableName(),
+    attributeDefinitions(),
+    getPartitionKey(keySchema()),
+    getSortKey(keySchema()),
+    TableStatus.ACTIVE
+)
+
+private val KeySchemaElement.isPartition get(): Boolean = keyType() == KeyType.HASH
+private val KeySchemaElement.isSort get(): Boolean = keyType() == KeyType.RANGE
+
+private fun getPartitionKey(keySchema: List<KeySchemaElement>) =
+    keySchema.first { it.isPartition }.attributeName()
+
+private fun getSortKey(keySchema: List<KeySchemaElement>) =
+    keySchema.firstOrNull { it.isSort }?.attributeName()
+
+private fun nameToKeySchemaElement(name: String, keyType: KeyType) =
+    KeySchemaElement.builder().attributeName(name).keyType(keyType).build()

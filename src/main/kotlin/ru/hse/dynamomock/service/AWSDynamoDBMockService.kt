@@ -1,12 +1,7 @@
 package ru.hse.dynamomock.service
 
 import ru.hse.dynamomock.db.DataStorageLayer
-import ru.hse.dynamomock.model.AttributeInfo
-import ru.hse.dynamomock.model.DBGetItemRequest
-import ru.hse.dynamomock.model.DBPutItemRequest
-import ru.hse.dynamomock.model.Key
-import ru.hse.dynamomock.model.TableMetadata
-import ru.hse.dynamomock.model.TableMetadata.Companion.toTableMetadata
+import ru.hse.dynamomock.model.*
 import software.amazon.awssdk.services.dynamodb.model.*
 
 class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
