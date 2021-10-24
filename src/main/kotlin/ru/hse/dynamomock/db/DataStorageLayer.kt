@@ -3,7 +3,6 @@ package ru.hse.dynamomock.db
 
 import ru.hse.dynamomock.model.AttributeInfo
 import ru.hse.dynamomock.model.DBGetItemRequest
-import ru.hse.dynamomock.model.DBGetItemResponse
 import ru.hse.dynamomock.model.DBPutItemRequest
 import ru.hse.dynamomock.model.TableMetadata
 

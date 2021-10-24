@@ -52,11 +52,11 @@ class ExposedStorage(
 
             val info = if (request.partitionKey.attributeType == "n") {
                 table.select {
-                    (table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal())
+                    table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal()
                 }
             } else {
                 table.select {
-                    (table.stringPartitionKey eq request.partitionKey.attributeValue.toString())
+                    table.stringPartitionKey eq request.partitionKey.attributeValue.toString()
                 }
             }
 

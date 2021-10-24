@@ -1,7 +1,5 @@
 package ru.hse.dynamomock.service
 
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import ru.hse.dynamomock.db.DataStorageLayer
 import ru.hse.dynamomock.model.AttributeInfo
 import ru.hse.dynamomock.model.DBGetItemRequest
@@ -14,43 +12,30 @@ import software.amazon.awssdk.services.dynamodb.model.*
 class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     private val nameToTableMetadata = mutableMapOf<String, TableMetadata>()
 
-    private fun convertAttributeValueToInfo(attributeValue: AttributeValue?): Pair<String, Any?> {
-        require(attributeValue != null)
-        var type = ""
-        var item: Any? = null
+    private fun convertAttributeValueToInfo(attributeValue: AttributeValue): Pair<String?, Any?> =
         if (attributeValue.bool() != null) {
-            type = "BOOL"
-            item = attributeValue.bool().toString()
+            "BOOL" to attributeValue.bool().toString()
         } else if (attributeValue.s() != null) {
-            type = "S"
-            item = attributeValue.s()
+            "S" to attributeValue.s()
         } else if (attributeValue.n() != null) {
-            type = "N"
-            item = attributeValue.n()
+            "N" to attributeValue.n()
         } else if (attributeValue.hasSs()) {
-            type = "SS"
-            item = attributeValue.ss().toString()
+            "SS" to attributeValue.ss().toString()
         } else if (attributeValue.hasNs()) {
-            type = "NS"
-            item = attributeValue.ns().toString()
+            "NS" to attributeValue.ns().toString()
         } else if (attributeValue.hasBs()) {
-            type = "BS"
-            item = attributeValue.bs().toString()
+            "BS" to attributeValue.bs().toString()
         } else if (attributeValue.b() != null) {
-            type = "B"
-            item = attributeValue.b().toString()
+            "B" to attributeValue.b().toString()
         } else if (attributeValue.hasM()) {
-            type = "M"
-            item = attributeValue.m().toString()
+            "M" to attributeValue.m().toString()
         } else if (attributeValue.hasL()) {
-            type = "L"
-            item = attributeValue.l().toString()
+            "L" to attributeValue.l().toString()
         } else if (attributeValue.nul() != null) {
-            type = "NUL"
-            item = attributeValue.nul().toString()
+            "NUL" to attributeValue.nul().toString()
+        } else {
+            null to null
         }
-        return Pair(type, item)
-    }
 
     private fun convertAttributeInfoToValue(attributeInfo: AttributeInfo): Pair<String, AttributeValue> {
         return when (attributeInfo.attributeType) {
@@ -71,7 +56,6 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
     fun putItem(request: PutItemRequest) {
         val tableName = request.tableName()
-        val itemsList = mutableListOf<AttributeInfo>()
         val tableMetadata = nameToTableMetadata[tableName]
 
         val partitionKeyName = tableMetadata?.partitionKey ?: return
@@ -83,21 +67,33 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
         val (partitionKeyType, partitionKeyValue) = convertAttributeValueToInfo(partitionKeyAttributeValue)
 
-        if (partitionKeyValue == null) {
+        if (partitionKeyType == null || partitionKeyValue == null) {
             // TODO: angry dynamodb error message
             return
         }
         val partitionKey = Key(partitionKeyName, partitionKeyType, partitionKeyValue)
 
-        request.item().forEach{
-            val (type, value) = convertAttributeValueToInfo(it.value)
-            itemsList.add(AttributeInfo(it.key, type, value.toString()))
-        }
+        val itemsList = request.item().map { (k, v) ->
+            val (type, value) = convertAttributeValueToInfo(v)
+            if (type == null || value == null) {
+                // TODO: angry dynamodb error message
+                return
+            }
+            AttributeInfo(k, type, value.toString())
+        }.toList()
 
         val sortKey = if (sortKeyName != null) {
             val sortKeyAttributeValue = request.item()[tableMetadata.sortKey]
-            val (sortKeyType, sortKeyValue) = convertAttributeValueToInfo(sortKeyAttributeValue)
-            Key(sortKeyName, sortKeyType, sortKeyValue)
+            if (sortKeyAttributeValue == null) {
+                null
+            } else {
+                val (sortKeyType, sortKeyValue) = convertAttributeValueToInfo(sortKeyAttributeValue)
+                if (sortKeyType == null || sortKeyValue == null) {
+                    null
+                } else {
+                    Key(sortKeyName, sortKeyType, sortKeyValue)
+                }
+            }
         } else null
 
         storage.putItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
@@ -114,7 +110,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             return GetItemResponse.builder().build()
 
         val (partitionKeyType, partitionKeyValue) = convertAttributeValueToInfo(partitionKeyAttributeValue)
-        if (partitionKeyValue == null) {
+        if (partitionKeyType == null || partitionKeyValue == null) {
             // TODO: angry dynamodb error message
             return GetItemResponse.builder().build()
         }
@@ -122,8 +118,16 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
         val sortKey = if (sortKeyName != null) {
             val sortKeyAttributeValue = request.key()[tableMetadata.sortKey]
-            val (sortKeyType, sortKeyValue) = convertAttributeValueToInfo(sortKeyAttributeValue)
-            Key(sortKeyName, sortKeyType, sortKeyValue)
+            if (sortKeyAttributeValue == null) {
+                null
+            } else {
+                val (sortKeyType, sortKeyValue) = convertAttributeValueToInfo(sortKeyAttributeValue)
+                if (sortKeyType == null || sortKeyValue == null) {
+                    null
+                } else {
+                    Key(sortKeyName, sortKeyType, sortKeyValue)
+                }
+            }
         } else null
 
         val response = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey, request.attributesToGet()))

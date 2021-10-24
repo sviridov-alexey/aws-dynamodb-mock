@@ -25,10 +25,6 @@ data class DBGetItemRequest(
     val attributesToGet: List<String>
 )
 
-data class DBGetItemResponse(
-    val items: List<AttributeInfo>
-)
-
 @Serializable
 data class AttributeInfo(
     val attributeName: String,
