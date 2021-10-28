@@ -31,8 +31,7 @@ class AWSDynamoDBMock : DynamoDbClient {
     }
 
     override fun putItem(putItemRequest: PutItemRequest): PutItemResponse {
-        service.putItem(putItemRequest)
-        return PutItemResponse.builder().build()
+        return service.putItem(putItemRequest)
     }
 
     override fun getItem(getItemRequest: GetItemRequest): GetItemResponse {

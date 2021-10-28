@@ -55,6 +55,42 @@ class ExposedStorage(
         }
     }
 
+    override fun updateItem(request: DBUpdateItemRequest) {
+        transaction(database) {
+            val table = checkNotNull(tables[request.tableName])
+
+            if (request.partitionKey.attributeType == "n") {
+                request.sortKey?.let {
+                    if (request.sortKey.attributeType == "n") {
+                        table.update({ (table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal()) and (table.numSortKey eq request.sortKey.attributeValue.toString().toBigDecimal()) }) {
+                            it[attributes] = Json.encodeToString(request.items)
+                        }
+                    } else {
+                        table.update({ (table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal()) and (table.stringSortKey eq request.sortKey.attributeValue.toString()) }) {
+                            it[attributes] = Json.encodeToString(request.items)
+                        }
+                    }
+                } ?: table.update({ table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal() }) {
+                    it[attributes] = Json.encodeToString(request.items)
+                }
+            } else {
+                request.sortKey?.let {
+                    if (request.sortKey.attributeType == "n") {
+                        table.update({ (table.stringPartitionKey eq request.partitionKey.attributeValue.toString()) and (table.numSortKey eq request.sortKey.attributeValue.toString().toBigDecimal()) }) {
+                            it[attributes] = Json.encodeToString(request.items)
+                        }
+                    } else {
+                        table.update({ (table.stringPartitionKey eq request.partitionKey.attributeValue.toString()) and (table.stringSortKey eq request.sortKey.attributeValue.toString()) }) {
+                            it[attributes] = Json.encodeToString(request.items)
+                        }
+                    }
+                } ?: table.update({ table.stringPartitionKey eq request.partitionKey.attributeValue.toString() }) {
+                    it[attributes] = Json.encodeToString(request.items)
+                }
+            }
+        }
+    }
+
     override fun getItem(request: DBGetItemRequest): List<AttributeInfo> {
         val item = mutableListOf<AttributeInfo>()
         transaction(database) {
@@ -63,17 +99,17 @@ class ExposedStorage(
             val info = if (request.partitionKey.attributeType == "n") {
                 request.sortKey?.let {
                     if (request.sortKey.attributeType == "n") {
-                        table.select { (table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal()) and (table.numSortKey eq request.sortKey.attributeValue.toString().toBigDecimal())}
+                        table.select { (table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal()) and (table.numSortKey eq request.sortKey.attributeValue.toString().toBigDecimal()) }
                     } else {
-                        table.select { (table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal()) and (table.stringSortKey eq request.sortKey.attributeValue.toString())}
+                        table.select { (table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal()) and (table.stringSortKey eq request.sortKey.attributeValue.toString()) }
                     }
                 } ?: table.select { table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal() }
             } else {
                 request.sortKey?.let {
                     if (request.sortKey.attributeType == "n") {
-                        table.select { (table.stringPartitionKey eq request.partitionKey.attributeValue.toString()) and (table.numSortKey eq request.sortKey.attributeValue.toString().toBigDecimal())}
+                        table.select { (table.stringPartitionKey eq request.partitionKey.attributeValue.toString()) and (table.numSortKey eq request.sortKey.attributeValue.toString().toBigDecimal()) }
                     } else {
-                        table.select { (table.stringPartitionKey eq request.partitionKey.attributeValue.toString()) and (table.stringSortKey eq request.sortKey.attributeValue.toString())}
+                        table.select { (table.stringPartitionKey eq request.partitionKey.attributeValue.toString()) and (table.stringSortKey eq request.sortKey.attributeValue.toString()) }
                     }
                 } ?: table.select { table.stringPartitionKey eq request.partitionKey.attributeValue.toString() }
             }

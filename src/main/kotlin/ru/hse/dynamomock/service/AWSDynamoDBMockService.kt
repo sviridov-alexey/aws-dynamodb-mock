@@ -58,11 +58,11 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         return tablesMetadata.remove(name)!!.toTableDescription()
     }
 
-    fun putItem(request: PutItemRequest) {
+    fun putItem(request: PutItemRequest): PutItemResponse {
         val tableName = request.tableName()
         val tableMetadata = tablesMetadata[tableName]
 
-        val partitionKeyName = tableMetadata?.partitionKey ?: return
+        val partitionKeyName = tableMetadata?.partitionKey ?: return PutItemResponse.builder().build()
         val partitionKey = getPartitionKeyFromMetadata(partitionKeyName, request.item())
 
         val sortKey = getSortKeyFromMetadata(tableMetadata.sortKey, request.item())
@@ -75,7 +75,24 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             AttributeInfo(k, type, value.toString())
         }.toList()
 
-        storage.putItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
+        val attributes = when (request.returnValues()) {
+            ReturnValue.ALL_OLD -> {
+                storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey)).associate {
+                    val (name, value) = convertAttributeInfoToValue(it)
+                    name to value
+                }
+            }
+            else -> null
+        }
+
+        if (attributes != null) {
+            storage.updateItem(DBUpdateItemRequest(tableName, partitionKey, sortKey, itemsList))
+        } else {
+            storage.putItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
+        }
+        return PutItemResponse.builder()
+            .attributes(attributes)
+            .build()
     }
 
     fun getItem(request: GetItemRequest): GetItemResponse {
