@@ -89,11 +89,11 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
         val response = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))
 
-        val item = mutableMapOf<String, AttributeValue>()
-        response.filter { request.attributesToGet().contains(it.attributeName)}.forEach {
+        val item = response.filter { request.attributesToGet().contains(it.attributeName) }.associate {
             val (name, value) = convertAttributeInfoToValue(it)
-            item[name] = value
+            name to value
         }
+
         return GetItemResponse.builder()
             .item(item)
             .build()
@@ -108,9 +108,21 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
         val sortKey = getSortKeyFromMetadata(tableMetadata.sortKey, request.key())
 
+        val attributes = when (request.returnValues()) {
+            ReturnValue.ALL_OLD -> {
+                storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey)).associate {
+                    val (name, value) = convertAttributeInfoToValue(it)
+                    name to value
+                }
+            }
+            else -> null
+        }
+
         storage.deleteItem(DBDeleteItemRequest(tableName, partitionKey, sortKey))
 
-        return DeleteItemResponse.builder().build()
+        return DeleteItemResponse.builder()
+            .attributes(attributes)
+            .build()
     }
 
     private fun getPartitionKeyFromMetadata(partitionKeyName: String, keys: Map<String, AttributeValue>): Key {
