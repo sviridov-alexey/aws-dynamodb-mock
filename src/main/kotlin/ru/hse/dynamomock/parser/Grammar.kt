@@ -10,7 +10,6 @@ internal abstract class Grammar<T> {
     private val tokensAlphabet = mutableListOf<Token>()
 
     fun parse(input: CharSequence): T {
-        println(tokensAlphabet.map { it.name })
         val tokens = DefaultTokenizer(tokensAlphabet).tokenize(input).toList()
         return when (val result = parser.parseToEnd(tokens, 0)) {
             is SuccessfulParse -> result.value

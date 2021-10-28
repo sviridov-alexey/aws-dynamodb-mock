@@ -23,20 +23,20 @@ internal class AndCombinator<T, S, R>(
     }
 }
 
-internal infix fun <S> SkipCombinator.and(other: OrdinaryParser<S>): AndCombinator<Unit, S, S> =
+internal infix fun <T, S> SkipCombinator<T>.and(other: OrdinaryParser<S>): AndCombinator<T, S, S> =
     AndCombinator(this, other) { _, x -> x }
 
-internal operator fun <S> SkipCombinator.times(other: OrdinaryParser<S>) = this and other
+internal operator fun <T, S> SkipCombinator<T>.times(other: OrdinaryParser<S>) = this and other
 
-internal infix fun <T> OrdinaryParser<T>.and(other: SkipCombinator): AndCombinator<T, Unit, T> =
+internal infix fun <T, S> OrdinaryParser<T>.and(other: SkipCombinator<S>): AndCombinator<T, S, T> =
     AndCombinator(this, other) { x, _ -> x }
 
-internal operator fun <T> OrdinaryParser<T>.times(other: SkipCombinator) = this and other
+internal operator fun <T, S> OrdinaryParser<T>.times(other: SkipCombinator<S>) = this and other
 
-internal infix fun SkipCombinator.and(other: SkipCombinator): SkipCombinator =
-    SkipCombinator(AndCombinator(this, other) { _, _, -> })
+internal infix fun <T, S> SkipCombinator<T>.and(other: SkipCombinator<S>): SkipCombinator<Pair<T, S>> =
+    SkipCombinator(AndCombinator(this, other) { x, y, -> x to y })
 
-internal operator fun SkipCombinator.times(other: SkipCombinator) = this and other
+internal operator fun <T, S> SkipCombinator<T>.times(other: SkipCombinator<S>) = this and other
 
 internal infix fun <T, S> OrdinaryParser<T>.and(other: OrdinaryParser<S>): OrdinaryParser<Pair<T, S>> =
     AndCombinator(this, other, ::Pair)
