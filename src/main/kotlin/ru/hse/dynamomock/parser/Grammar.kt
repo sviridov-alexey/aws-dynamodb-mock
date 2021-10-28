@@ -18,6 +18,7 @@ internal abstract class Grammar<T> {
     }
 
     protected operator fun <T : Token> T.provideDelegate(thisRef: Grammar<*>, property: KProperty<*>): T = apply {
+        name = name ?: property.name
         tokensAlphabet += this
     }
 

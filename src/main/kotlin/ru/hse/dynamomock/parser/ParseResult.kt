@@ -28,14 +28,16 @@ internal data class ParsedToken(
     val text get(): String = input.substring(offset, offset + length)
 }
 
-internal class MismatchFail(expected: Token) : FailedParse("Unexpected token: ${expected.name ?: "???"}.")
+internal class MismatchFail(expected: Token) : FailedParse("Unexpected token: '${expected.nameOrDefault}'.")
 
-internal class EofFail(expected: Token) : FailedParse("EOF found, but ${expected.name ?: "???"} expected.")
+internal class EofFail(expected: Token) : FailedParse("EOF found, but '${expected.nameOrDefault}' expected.")
 
 internal class AlternativesFail(fails: List<FailedParse>) : FailedParse(
     "Parse failures during 'or' operation:\n${fails.joinToString("\n")}"
 )
 
 internal class IncompleteParseFail(nextToken: Token) : FailedParse(
-    "Cannot parse to the end: after finishing there is a token ${nextToken.name ?: "???"}."
+    "Cannot parse to the end: after finishing there is a token '${nextToken.nameOrDefault}'."
 )
+
+private val Token.nameOrDefault get(): String = name ?: "???"

@@ -2,7 +2,7 @@ package ru.hse.dynamomock.parser.lexer
 
 import ru.hse.dynamomock.parser.*
 
-internal abstract class Token(val name: String?, val ignore: Boolean) : OrdinaryParser<ParsedToken> {
+internal abstract class Token(var name: String?, val ignore: Boolean) : OrdinaryParser<ParsedToken> {
     abstract fun match(input: CharSequence, fromIndex: Int): Int
 
     override fun parse(tokens: List<ParsedToken>, fromIndex: Int): ParseResult<ParsedToken> {
