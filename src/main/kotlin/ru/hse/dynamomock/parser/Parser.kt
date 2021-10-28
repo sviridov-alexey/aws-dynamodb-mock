@@ -7,17 +7,14 @@
 
 package ru.hse.dynamomock.parser
 
+import ru.hse.dynamomock.parser.combinators.and
+import ru.hse.dynamomock.parser.combinators.eof
+
 internal interface Parser<out T> {
     fun parse(tokens: List<ParsedToken>, fromIndex: Int): ParseResult<T>
 }
 
 internal interface OrdinaryParser<out T> : Parser<T>
 
-internal fun <T> Parser<T>.parseToEnd(tokens: List<ParsedToken>, fromIndex: Int): ParseResult<T> =
-    when (val result = parse(tokens, fromIndex)) {
-        is FailedParse -> result
-        is SuccessfulParse -> when (val position = result.nextPosition) {
-            tokens.size -> result
-            else -> IncompleteParseFail(tokens[position].token)
-        }
-    }
+internal fun <T> OrdinaryParser<T>.parseToEnd(tokens: List<ParsedToken>, fromIndex: Int): ParseResult<T> =
+    (this and eof).parse(tokens, fromIndex)

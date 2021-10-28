@@ -5,7 +5,7 @@ import ru.hse.dynamomock.parser.lexer.Token
 import kotlin.reflect.KProperty
 
 internal abstract class Grammar<T> {
-    abstract val parser: Parser<T>
+    protected abstract val parser: OrdinaryParser<T>
 
     private val tokensAlphabet = mutableListOf<Token>()
 
