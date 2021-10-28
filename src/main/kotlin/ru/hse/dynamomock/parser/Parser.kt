@@ -12,3 +12,12 @@ internal interface Parser<out T> {
 }
 
 internal interface OrdinaryParser<out T> : Parser<T>
+
+internal fun <T> Parser<T>.parseToEnd(tokens: List<ParsedToken>, fromIndex: Int): ParseResult<T> =
+    when (val result = parse(tokens, fromIndex)) {
+        is FailedParse -> result
+        is SuccessfulParse -> when (val position = result.nextPosition) {
+            tokens.size -> result
+            else -> IncompleteParseFail(tokens[position].token)
+        }
+    }

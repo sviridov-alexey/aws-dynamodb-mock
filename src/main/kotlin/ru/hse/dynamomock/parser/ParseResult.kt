@@ -35,3 +35,7 @@ internal class EofFail(expected: Token) : FailedParse("EOF found, but ${expected
 internal class AlternativesFail(fails: List<FailedParse>) : FailedParse(
     "Parse failures during 'or' operation:\n${fails.joinToString("\n")}"
 )
+
+internal class IncompleteParseFail(nextToken: Token) : FailedParse(
+    "Cannot parse to the end: after finishing there is a token ${nextToken.name ?: "???"}."
+)

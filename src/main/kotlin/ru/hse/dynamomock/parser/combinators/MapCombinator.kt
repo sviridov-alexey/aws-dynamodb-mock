@@ -16,3 +16,6 @@ internal class MapCombinator<T, R>(
 
 internal infix fun <T, R> OrdinaryParser<T>.map(transform: (T) -> R): OrdinaryParser<R> =
     MapCombinator(this, transform)
+
+internal operator fun <R> OrdinaryParser<ParsedToken>.invoke(transform: (ParsedToken) -> R): OrdinaryParser<R> =
+    MapCombinator(this, transform)
