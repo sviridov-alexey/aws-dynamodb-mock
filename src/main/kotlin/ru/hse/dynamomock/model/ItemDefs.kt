@@ -22,7 +22,12 @@ data class DBGetItemRequest(
     val tableName: String,
     val partitionKey: Key,
     val sortKey: Key?,
-    val attributesToGet: List<String>
+)
+
+data class DBDeleteItemRequest(
+    val tableName: String,
+    val partitionKey: Key,
+    val sortKey: Key?,
 )
 
 @Serializable

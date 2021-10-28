@@ -3,7 +3,6 @@ package ru.hse.dynamomock.service
 import ru.hse.dynamomock.db.DataStorageLayer
 import ru.hse.dynamomock.model.*
 import software.amazon.awssdk.services.dynamodb.model.*
-import java.lang.IllegalArgumentException
 
 class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     private val tablesMetadata = mutableMapOf<String, TableMetadata>()
@@ -88,7 +87,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
         val sortKey = getSortKeyFromMetadata(tableMetadata.sortKey, request.key())
 
-        val response = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey, request.attributesToGet()))
+        val response = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))
 
         val item = mutableMapOf<String, AttributeValue>()
         response.filter { request.attributesToGet().contains(it.attributeName)}.forEach {
@@ -98,6 +97,20 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         return GetItemResponse.builder()
             .item(item)
             .build()
+    }
+
+    fun deleteItem(request: DeleteItemRequest): DeleteItemResponse {
+        val tableName = request.tableName()
+        val tableMetadata = tablesMetadata[tableName]
+
+        val partitionKeyName = tableMetadata?.partitionKey ?: return DeleteItemResponse.builder().build()
+        val partitionKey = getPartitionKeyFromMetadata(partitionKeyName, request.key())
+
+        val sortKey = getSortKeyFromMetadata(tableMetadata.sortKey, request.key())
+
+        storage.deleteItem(DBDeleteItemRequest(tableName, partitionKey, sortKey))
+
+        return DeleteItemResponse.builder().build()
     }
 
     private fun getPartitionKeyFromMetadata(partitionKeyName: String, keys: Map<String, AttributeValue>): Key {

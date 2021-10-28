@@ -39,6 +39,10 @@ class AWSDynamoDBMock : DynamoDbClient {
         return service.getItem(getItemRequest)
     }
 
+    override fun deleteItem(deleteItemRequest: DeleteItemRequest): DeleteItemResponse {
+        return service.deleteItem(deleteItemRequest)
+    }
+
     companion object {
         private const val SERVICE_NAME = "dynamodb"
         private const val DATABASE_NAME = "testDB"

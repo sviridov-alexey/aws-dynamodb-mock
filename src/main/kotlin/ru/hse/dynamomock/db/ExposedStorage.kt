@@ -61,18 +61,49 @@ class ExposedStorage(
             val table = checkNotNull(tables[request.tableName])
 
             val info = if (request.partitionKey.attributeType == "n") {
-                table.select {
-                    table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal()
-                }
+                request.sortKey?.let {
+                    if (request.sortKey.attributeType == "n") {
+                        table.select { (table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal()) and (table.numSortKey eq request.sortKey.attributeValue.toString().toBigDecimal())}
+                    } else {
+                        table.select { (table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal()) and (table.stringSortKey eq request.sortKey.attributeValue.toString())}
+                    }
+                } ?: table.select { table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal() }
             } else {
-                table.select {
-                    table.stringPartitionKey eq request.partitionKey.attributeValue.toString()
-                }
+                request.sortKey?.let {
+                    if (request.sortKey.attributeType == "n") {
+                        table.select { (table.stringPartitionKey eq request.partitionKey.attributeValue.toString()) and (table.numSortKey eq request.sortKey.attributeValue.toString().toBigDecimal())}
+                    } else {
+                        table.select { (table.stringPartitionKey eq request.partitionKey.attributeValue.toString()) and (table.stringSortKey eq request.sortKey.attributeValue.toString())}
+                    }
+                } ?: table.select { table.stringPartitionKey eq request.partitionKey.attributeValue.toString() }
             }
 
             info.first().let { item.addAll(Json.decodeFromString(it[table.attributes]))}
         }
         return item
+    }
+
+    override fun deleteItem(request: DBDeleteItemRequest) {
+        transaction(database) {
+            val table = checkNotNull(tables[request.tableName])
+            if (request.partitionKey.attributeType == "n") {
+                request.sortKey?.let {
+                    if (request.sortKey.attributeType == "n") {
+                        table.deleteWhere { (table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal()) and (table.numSortKey eq request.sortKey.attributeValue.toString().toBigDecimal())}
+                    } else {
+                        table.deleteWhere { (table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal()) and (table.stringSortKey eq request.sortKey.attributeValue.toString())}
+                    }
+                } ?: table.deleteWhere { table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal() }
+            } else {
+                request.sortKey?.let {
+                    if (request.sortKey.attributeType == "n") {
+                        table.deleteWhere { (table.stringPartitionKey eq request.partitionKey.attributeValue.toString()) and (table.numSortKey eq request.sortKey.attributeValue.toString().toBigDecimal())}
+                    } else {
+                        table.deleteWhere { (table.stringPartitionKey eq request.partitionKey.attributeValue.toString()) and (table.stringSortKey eq request.sortKey.attributeValue.toString())}
+                    }
+                } ?: table.deleteWhere { table.stringPartitionKey eq request.partitionKey.attributeValue.toString()}
+            }
+        }
     }
 
     class DynamoTable(metadata: TableMetadata) : Table(metadata.tableName) {
