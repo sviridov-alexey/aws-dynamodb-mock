@@ -1,6 +1,7 @@
 package ru.hse.dynamomock.model
 
 import kotlinx.serialization.Serializable
+import java.math.BigDecimal
 
 @Suppress("unused")
 data class DynamoItem(
@@ -44,8 +45,16 @@ data class AttributeInfo(
     val attributeValue: String
 )
 
-data class Key(
-    val attributeName: String,
-    val attributeType: String,
-    val attributeValue: Any?
+sealed class Key(
+    val attributeName: String
 )
+
+class StringKey(
+    attributeName: String,
+    val attributeValue: String
+) : Key(attributeName)
+
+class NumKey(
+    attributeName: String,
+    val attributeValue: BigDecimal
+) : Key(attributeName)

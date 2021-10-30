@@ -6,6 +6,7 @@ import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import ru.hse.dynamomock.model.*
+import ru.hse.dynamomock.model.Key
 
 @Suppress("unused")
 class ExposedStorage(
@@ -55,38 +56,38 @@ class ExposedStorage(
         }
     }
 
+    fun createKeyCondition(
+        table: DynamoTable,
+        partitionKey: Key,
+        sortKey: Key?
+    ): (SqlExpressionBuilder.() -> Op<Boolean>) = {
+
+        val partitionOp = when (partitionKey) {
+            is StringKey -> table.stringPartitionKey eq partitionKey.attributeValue
+            is NumKey -> table.numPartitionKey eq partitionKey.attributeValue
+        }
+
+        val sortOp = sortKey?.let {
+            when (it) {
+                is StringKey -> table.stringSortKey eq it.attributeValue
+                is NumKey -> table.numSortKey eq it.attributeValue
+            }
+        }
+        if (sortOp == null) {
+            partitionOp
+        } else {
+            partitionOp and sortOp
+        }
+
+    }
+
     override fun updateItem(request: DBUpdateItemRequest) {
         transaction(database) {
             val table = checkNotNull(tables[request.tableName])
 
-            if (request.partitionKey.attributeType == "n") {
-                request.sortKey?.let {
-                    if (request.sortKey.attributeType == "n") {
-                        table.update({ (table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal()) and (table.numSortKey eq request.sortKey.attributeValue.toString().toBigDecimal()) }) {
-                            it[attributes] = Json.encodeToString(request.items)
-                        }
-                    } else {
-                        table.update({ (table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal()) and (table.stringSortKey eq request.sortKey.attributeValue.toString()) }) {
-                            it[attributes] = Json.encodeToString(request.items)
-                        }
-                    }
-                } ?: table.update({ table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal() }) {
-                    it[attributes] = Json.encodeToString(request.items)
-                }
-            } else {
-                request.sortKey?.let {
-                    if (request.sortKey.attributeType == "n") {
-                        table.update({ (table.stringPartitionKey eq request.partitionKey.attributeValue.toString()) and (table.numSortKey eq request.sortKey.attributeValue.toString().toBigDecimal()) }) {
-                            it[attributes] = Json.encodeToString(request.items)
-                        }
-                    } else {
-                        table.update({ (table.stringPartitionKey eq request.partitionKey.attributeValue.toString()) and (table.stringSortKey eq request.sortKey.attributeValue.toString()) }) {
-                            it[attributes] = Json.encodeToString(request.items)
-                        }
-                    }
-                } ?: table.update({ table.stringPartitionKey eq request.partitionKey.attributeValue.toString() }) {
-                    it[attributes] = Json.encodeToString(request.items)
-                }
+            val condition = createKeyCondition(table, request.partitionKey, request.sortKey)
+            table.update(condition) {
+                it[attributes] = Json.encodeToString(request.items)
             }
         }
     }
@@ -99,22 +100,34 @@ class ExposedStorage(
             val info = if (request.partitionKey.attributeType == "n") {
                 request.sortKey?.let {
                     if (request.sortKey.attributeType == "n") {
-                        table.select { (table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal()) and (table.numSortKey eq request.sortKey.attributeValue.toString().toBigDecimal()) }
+                        table.select {
+                            (table.numPartitionKey eq request.partitionKey.attributeValue.toString()
+                                .toBigDecimal()) and (table.numSortKey eq request.sortKey.attributeValue.toString()
+                                .toBigDecimal())
+                        }
                     } else {
-                        table.select { (table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal()) and (table.stringSortKey eq request.sortKey.attributeValue.toString()) }
+                        table.select {
+                            (table.numPartitionKey eq request.partitionKey.attributeValue.toString()
+                                .toBigDecimal()) and (table.stringSortKey eq request.sortKey.attributeValue.toString())
+                        }
                     }
-                } ?: table.select { table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal() }
+                } ?: table.select {
+                    table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal()
+                }
             } else {
                 request.sortKey?.let {
                     if (request.sortKey.attributeType == "n") {
-                        table.select { (table.stringPartitionKey eq request.partitionKey.attributeValue.toString()) and (table.numSortKey eq request.sortKey.attributeValue.toString().toBigDecimal()) }
+                        table.select {
+                            (table.stringPartitionKey eq request.partitionKey.attributeValue.toString()) and (table.numSortKey eq request.sortKey.attributeValue.toString()
+                                .toBigDecimal())
+                        }
                     } else {
                         table.select { (table.stringPartitionKey eq request.partitionKey.attributeValue.toString()) and (table.stringSortKey eq request.sortKey.attributeValue.toString()) }
                     }
                 } ?: table.select { table.stringPartitionKey eq request.partitionKey.attributeValue.toString() }
             }
 
-            info.first().let { item.addAll(Json.decodeFromString(it[table.attributes]))}
+            info.first().let { item.addAll(Json.decodeFromString(it[table.attributes])) }
         }
         return item
     }
@@ -125,19 +138,31 @@ class ExposedStorage(
             if (request.partitionKey.attributeType == "n") {
                 request.sortKey?.let {
                     if (request.sortKey.attributeType == "n") {
-                        table.deleteWhere { (table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal()) and (table.numSortKey eq request.sortKey.attributeValue.toString().toBigDecimal())}
+                        table.deleteWhere {
+                            (table.numPartitionKey eq request.partitionKey.attributeValue.toString()
+                                .toBigDecimal()) and (table.numSortKey eq request.sortKey.attributeValue.toString()
+                                .toBigDecimal())
+                        }
                     } else {
-                        table.deleteWhere { (table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal()) and (table.stringSortKey eq request.sortKey.attributeValue.toString())}
+                        table.deleteWhere {
+                            (table.numPartitionKey eq request.partitionKey.attributeValue.toString()
+                                .toBigDecimal()) and (table.stringSortKey eq request.sortKey.attributeValue.toString())
+                        }
                     }
-                } ?: table.deleteWhere { table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal() }
+                } ?: table.deleteWhere {
+                    table.numPartitionKey eq request.partitionKey.attributeValue.toString().toBigDecimal()
+                }
             } else {
                 request.sortKey?.let {
                     if (request.sortKey.attributeType == "n") {
-                        table.deleteWhere { (table.stringPartitionKey eq request.partitionKey.attributeValue.toString()) and (table.numSortKey eq request.sortKey.attributeValue.toString().toBigDecimal())}
+                        table.deleteWhere {
+                            (table.stringPartitionKey eq request.partitionKey.attributeValue.toString()) and (table.numSortKey eq request.sortKey.attributeValue.toString()
+                                .toBigDecimal())
+                        }
                     } else {
-                        table.deleteWhere { (table.stringPartitionKey eq request.partitionKey.attributeValue.toString()) and (table.stringSortKey eq request.sortKey.attributeValue.toString())}
+                        table.deleteWhere { (table.stringPartitionKey eq request.partitionKey.attributeValue.toString()) and (table.stringSortKey eq request.sortKey.attributeValue.toString()) }
                     }
-                } ?: table.deleteWhere { table.stringPartitionKey eq request.partitionKey.attributeValue.toString()}
+                } ?: table.deleteWhere { table.stringPartitionKey eq request.partitionKey.attributeValue.toString() }
             }
         }
     }
