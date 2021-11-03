@@ -16,6 +16,9 @@ internal class DefaultTokenizer(private val tokensAlphabet: List<Token>) : Token
         while (true) {
             val next = nextToken(state, input)
             if (next == null) {
+                require(input.length == state.offset) {
+                    "Cannot tokenize the whole input. Unknown token: row=${state.row}, column=${state.column}."
+                }
                 return null
             } else if (!next.token.ignore) {
                 return next
