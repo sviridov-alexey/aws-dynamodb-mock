@@ -43,6 +43,9 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     }
 
     fun createTable(request: CreateTableRequest): TableDescription {
+        require(request.tableName() !in tablesMetadata) {
+            "Table ${request.tableName()} already exists. Cannot create."
+        }
         return request.toTableMetadata().also {
             storage.createTable(it)
             tablesMetadata[it.tableName] = it
