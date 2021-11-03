@@ -15,17 +15,17 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         } else if (attributeValue.n() != null) {
             "N" to attributeValue.n()
         } else if (attributeValue.hasSs()) {
-            "SS" to attributeValue.ss().toString()
+            "SS" to attributeValue.ss()
         } else if (attributeValue.hasNs()) {
-            "NS" to attributeValue.ns().toString()
+            "NS" to attributeValue.ns()
         } else if (attributeValue.hasBs()) {
-            "BS" to attributeValue.bs().toString()
+            "BS" to attributeValue.bs()
         } else if (attributeValue.b() != null) {
             "B" to attributeValue.b().toString()
         } else if (attributeValue.hasM()) {
-            "M" to attributeValue.m().toString()
+            "M" to attributeValue.m()
         } else if (attributeValue.hasL()) {
-            "L" to attributeValue.l().toString()
+            "L" to attributeValue.l()
         } else if (attributeValue.nul() != null) {
             "NUL" to attributeValue.nul().toString()
         } else {
@@ -63,7 +63,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         val tableMetadata = tablesMetadata[tableName]
 
         val partitionKeyName = tableMetadata?.partitionKey ?: return PutItemResponse.builder().build()
-        val partitionKey = getPartitionKeyFromMetadata(partitionKeyName, request.item())
+        val partitionKey = getKeyFromMetadata(partitionKeyName, request.item())
 
         val sortKey = getSortKeyFromMetadata(tableMetadata.sortKey, request.item())
 
@@ -100,7 +100,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         val tableMetadata = tablesMetadata[tableName]
 
         val partitionKeyName = tableMetadata?.partitionKey ?: return GetItemResponse.builder().build()
-        val partitionKey = getPartitionKeyFromMetadata(partitionKeyName, request.key())
+        val partitionKey = getKeyFromMetadata(partitionKeyName, request.key())
 
         val sortKey = getSortKeyFromMetadata(tableMetadata.sortKey, request.key())
 
@@ -121,7 +121,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         val tableMetadata = tablesMetadata[tableName]
 
         val partitionKeyName = tableMetadata?.partitionKey ?: return DeleteItemResponse.builder().build()
-        val partitionKey = getPartitionKeyFromMetadata(partitionKeyName, request.key())
+        val partitionKey = getKeyFromMetadata(partitionKeyName, request.key())
 
         val sortKey = getSortKeyFromMetadata(tableMetadata.sortKey, request.key())
 
@@ -142,14 +142,17 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             .build()
     }
 
-    private fun getPartitionKeyFromMetadata(partitionKeyName: String, keys: Map<String, AttributeValue>): Key {
+    private fun getKeyFromMetadata(partitionKeyName: String, keys: Map<String, AttributeValue>): Key {
         val partitionKeyAttributeValue = checkNotNull(keys[partitionKeyName])
         val (partitionKeyType, partitionKeyValue) = convertAttributeValueToInfo(partitionKeyAttributeValue)
 
         requireNotNull(partitionKeyType) {"No such AttributeValue type"}
         requireNotNull(partitionKeyValue) {"No such AttributeValue type"}
 
-        return Key(partitionKeyName, partitionKeyType, partitionKeyValue)
+        return when (partitionKeyType) {
+            "N" -> NumKey(partitionKeyName, partitionKeyValue.toString().toBigDecimal())
+            else -> StringKey(partitionKeyName, partitionKeyValue.toString())
+        }
     }
 
     private fun getSortKeyFromMetadata(sortKeyName: String?, keys: Map<String, AttributeValue>): Key? =
@@ -158,12 +161,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             if (sortKeyAttributeValue == null) {
                 null
             } else {
-                val (sortKeyType, sortKeyValue) = convertAttributeValueToInfo(sortKeyAttributeValue)
-                if (sortKeyType == null || sortKeyValue == null) {
-                    null
-                } else {
-                    Key(sortKeyName, sortKeyType, sortKeyValue)
-                }
+                getKeyFromMetadata(sortKeyName, keys)
             }
         } else null
 
