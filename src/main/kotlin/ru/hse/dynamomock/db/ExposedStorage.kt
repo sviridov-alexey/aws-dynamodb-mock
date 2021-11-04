@@ -18,20 +18,21 @@ class ExposedStorage(
         Database.connect("jdbc:h2:mem:$dbname;DB_CLOSE_DELAY=-1", "org.h2.Driver", username, password)
     private val tables = mutableMapOf<String, DynamoTable>()
 
-    override fun createTable(tableMetadata: TableMetadata) = transaction(database) {
+    override fun createTable(tableMetadata: TableMetadata) {
         require(tableMetadata.tableName !in tables) {
             "Table ${tableMetadata.tableName} already exists. Cannot create."
         }
         val table = DynamoTable(tableMetadata)
+        transaction(database) { SchemaUtils.create(table) }
         tables[tableMetadata.tableName] = table
-        SchemaUtils.create(table)
     }
 
-    override fun deleteTable(tableName: String) = transaction {
+    override fun deleteTable(tableName: String) {
         require(tableName in tables) {
             "Cannot delete non-existent table."
         }
-        SchemaUtils.drop(tables.remove(tableName)!!)
+        transaction(database) { SchemaUtils.drop(tables.getValue(tableName)) }
+        tables.remove(tableName)
     }
 
     private fun createKeyCondition(

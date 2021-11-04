@@ -10,11 +10,9 @@ data class TableMetadata(
     val sortKey: String?,
     val tableStatus: TableStatus,
     val creationDateTime: Instant = Instant.now()
-)
-
-fun TableMetadata.toTableDescription(): TableDescription {
+) {
     // TODO supports other parameters
-    return TableDescription.builder()
+    fun toTableDescription(): TableDescription = TableDescription.builder()
         .tableName(tableName)
         .attributeDefinitions(attributeDefinitions)
         .keySchema(listOfNotNull(
