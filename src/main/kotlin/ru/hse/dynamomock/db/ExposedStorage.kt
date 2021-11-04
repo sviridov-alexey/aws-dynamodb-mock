@@ -4,7 +4,6 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 import ru.hse.dynamomock.model.*
 import ru.hse.dynamomock.model.Key
@@ -86,16 +85,19 @@ class ExposedStorage(
         }
     }
 
-    override fun getItem(request: DBGetItemRequest): List<AttributeInfo> {
+    override fun getItem(request: DBGetItemRequest): List<AttributeInfo>? {
         val item = mutableListOf<AttributeInfo>()
         transaction(database) {
             val table = checkNotNull(tables[request.tableName])
             val condition = createKeyCondition(table, request.partitionKey, request.sortKey)
             val info = table.select{condition()}
 
-            info.first().let { item.addAll(Json.decodeFromString(it[table.attributes]))}
+            val foundItem = info.firstOrNull()
+            if (foundItem != null)
+                item.addAll(Json.decodeFromString(foundItem[table.attributes]))
         }
-        return item
+
+        return if (item.isEmpty()) null else item
     }
 
     override fun deleteItem(request: DBDeleteItemRequest) {

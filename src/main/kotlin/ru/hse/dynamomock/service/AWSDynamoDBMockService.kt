@@ -2,14 +2,16 @@ package ru.hse.dynamomock.service
 
 import ru.hse.dynamomock.db.DataStorageLayer
 import ru.hse.dynamomock.model.*
+import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.services.dynamodb.model.*
+import java.util.Base64
 
 class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     private val tablesMetadata = mutableMapOf<String, TableMetadata>()
 
     private fun convertAttributeValueToInfo(attributeValue: AttributeValue): Pair<String?, Any?> =
         if (attributeValue.bool() != null) {
-            "BOOL" to attributeValue.bool().toString()
+            "BOOL" to attributeValue.bool()
         } else if (attributeValue.s() != null) {
             "S" to attributeValue.s()
         } else if (attributeValue.n() != null) {
@@ -21,7 +23,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         } else if (attributeValue.hasBs()) {
             "BS" to attributeValue.bs()
         } else if (attributeValue.b() != null) {
-            "B" to attributeValue.b().toString()
+            "B" to Base64.getEncoder().encodeToString(attributeValue.b().asByteArray())
         } else if (attributeValue.hasM()) {
             "M" to attributeValue.m()
         } else if (attributeValue.hasL()) {
@@ -38,6 +40,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             "N" -> Pair(attributeInfo.attributeName, AttributeValue.builder().n(attributeInfo.attributeValue).build())
             "SS" -> Pair(attributeInfo.attributeName, AttributeValue.builder().ss(attributeInfo.attributeValue).build())
             "BOOL" -> Pair(attributeInfo.attributeName, AttributeValue.builder().bool(attributeInfo.attributeValue.toBoolean()).build())
+            "B" -> Pair(attributeInfo.attributeName, AttributeValue.builder().b(SdkBytes.fromByteArray(Base64.getDecoder().decode(attributeInfo.attributeValue))).build())
             else -> Pair(attributeInfo.attributeName, AttributeValue.builder().s(attributeInfo.attributeValue).build())
         }
     }
@@ -80,7 +83,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
         val attributes = when (request.returnValues()) {
             ReturnValue.ALL_OLD -> {
-                storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey)).associate {
+                storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))?.associate {
                     val (name, value) = convertAttributeInfoToValue(it)
                     name to value
                 }
@@ -93,6 +96,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         } else {
             storage.putItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
         }
+
         return PutItemResponse.builder()
             .attributes(attributes)
             .build()
@@ -109,7 +113,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
         val response = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))
 
-        val item = response.filter { request.attributesToGet().contains(it.attributeName) }.associate {
+        val item = response?.filter { request.attributesToGet().contains(it.attributeName) }?.associate {
             val (name, value) = convertAttributeInfoToValue(it)
             name to value
         }
@@ -130,7 +134,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
         val attributes = when (request.returnValues()) {
             ReturnValue.ALL_OLD -> {
-                storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey)).associate {
+                storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))?.associate {
                     val (name, value) = convertAttributeInfoToValue(it)
                     name to value
                 }

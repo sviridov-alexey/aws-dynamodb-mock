@@ -15,7 +15,7 @@ interface DataStorageLayer {
 
     fun putItem(request: DBPutItemRequest)
 
-    fun getItem(request: DBGetItemRequest): List<AttributeInfo>
+    fun getItem(request: DBGetItemRequest): List<AttributeInfo>?
 
     fun deleteItem(request: DBDeleteItemRequest)
 
