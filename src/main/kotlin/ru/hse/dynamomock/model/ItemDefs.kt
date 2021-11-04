@@ -16,7 +16,7 @@ data class DBPutItemRequest(
     val tableName: String,
     val partitionKey: Key,
     val sortKey: Key?,
-    val items: List<AttributeInfo>
+    val fieldValues: List<AttributeInfo>
 )
 
 data class DBGetItemRequest(
@@ -35,7 +35,7 @@ data class DBUpdateItemRequest(
     val tableName: String,
     val partitionKey: Key,
     val sortKey: Key?,
-    val items: List<AttributeInfo>
+    val fieldValues: List<AttributeInfo>
 )
 
 @Serializable

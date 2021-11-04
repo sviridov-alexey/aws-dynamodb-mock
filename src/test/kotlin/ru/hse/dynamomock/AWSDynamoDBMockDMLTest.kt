@@ -42,11 +42,11 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         repeat(10) {
             val item = RandomDataGenerator.generateItem(description.attributeDefinitions())
             mock.putItem(putItemRequestBuilder(description.tableName(), item))
-            val keys = item.entries.filter { i -> i.key in description.keySchema().map { it.attributeName() }.toList() }.associate { it.key to it.value }
+            val keys = item.entries.filter { i -> i.key in description.keySchema().map { it.attributeName() } }.associate { it.key to it.value }
 
             val response = mock.getItem(getItemRequestBuilder(
                 description.tableName(),
-                description.attributeDefinitions().map { it.attributeName() }.toList(),
+                description.attributeDefinitions().map { it.attributeName() },
                 keys
             ))
             assertEquals(item, response.item())
@@ -63,7 +63,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             val attributesFromItem = mapOf(attributeName to item[attributeName])
 
             mock.putItem(putItemRequestBuilder(description.tableName(), item))
-            val keys = item.entries.filter { i -> i.key in description.keySchema().map { it.attributeName() }.toList() }.associate { it.key to it.value }
+            val keys = item.entries.filter { i -> i.key in description.keySchema().map { it.attributeName() } }.associate { it.key to it.value }
 
             val response = mock.getItem(getItemRequestBuilder(
                 description.tableName(),
@@ -80,11 +80,11 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
         repeat(10) {
             val item = RandomDataGenerator.generateItem(description.attributeDefinitions())
-            val keys = item.entries.filter { i -> i.key in description.keySchema().map { it.attributeName() }.toList() }.associate { it.key to it.value }
+            val keys = item.entries.filter { i -> i.key in description.keySchema().map { it.attributeName() } }.associate { it.key to it.value }
 
             val response = mock.getItem(getItemRequestBuilder(
                 description.tableName(),
-                description.attributeDefinitions().map { it.attributeName() }.toList(),
+                description.attributeDefinitions().map { it.attributeName() },
                 keys
             ))
             assertTrue(response.item().isEmpty())
@@ -97,12 +97,12 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
         repeat(10) {
             val item = RandomDataGenerator.generateItem(description.attributeDefinitions())
-            val keys = item.entries.filter { i -> i.key in description.keySchema().map { it.attributeName() }.toList() }.associate { it.key to it.value }
+            val keys = item.entries.filter { i -> i.key in description.keySchema().map { it.attributeName() } }.associate { it.key to it.value }
             mock.putItem(putItemRequestBuilder(description.tableName(), item))
             mock.deleteItem(deleteItemRequestBuilder(description.tableName(), keys))
             val response = mock.getItem(getItemRequestBuilder(
                 description.tableName(),
-                description.attributeDefinitions().map { it.attributeName() }.toList(),
+                description.attributeDefinitions().map { it.attributeName() },
                 keys
             ))
             assertTrue(response.item().isEmpty())
@@ -115,7 +115,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
         repeat(10) {
             val item = RandomDataGenerator.generateItem(description.attributeDefinitions())
-            val keys = item.entries.filter { i -> i.key in description.keySchema().map { it.attributeName() }.toList() }.associate { it.key to it.value }
+            val keys = item.entries.filter { i -> i.key in description.keySchema().map { it.attributeName() } }.associate { it.key to it.value }
             assertTrue(mock.deleteItem(deleteItemRequestBuilder(description.tableName(), keys, ReturnValue.ALL_OLD)).attributes().isEmpty())
             mock.putItem(putItemRequestBuilder(description.tableName(), item))
             val response = mock.deleteItem(deleteItemRequestBuilder(description.tableName(), keys, ReturnValue.ALL_OLD))

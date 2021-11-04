@@ -4,12 +4,13 @@ import ru.hse.dynamomock.db.DataStorageLayer
 import ru.hse.dynamomock.model.*
 import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.services.dynamodb.model.*
+import java.lang.IllegalArgumentException
 import java.util.Base64
 
 class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     private val tablesMetadata = mutableMapOf<String, TableMetadata>()
 
-    private fun convertAttributeValueToInfo(attributeValue: AttributeValue): Pair<String?, Any?> =
+    private fun convertAttributeValueToInfo(attributeValue: AttributeValue): Pair<String, Any> =
         if (attributeValue.bool() != null) {
             "BOOL" to attributeValue.bool()
         } else if (attributeValue.s() != null) {
@@ -31,7 +32,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         } else if (attributeValue.nul() != null) {
             "NUL" to attributeValue.nul().toString()
         } else {
-            null to null
+            throw IllegalArgumentException("No such AttributeValue type")
         }
 
     private fun convertAttributeInfoToValue(attributeInfo: AttributeInfo): Pair<String, AttributeValue> {
@@ -66,20 +67,13 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
     fun putItem(request: PutItemRequest): PutItemResponse {
         val tableName = request.tableName()
-        val tableMetadata = tablesMetadata[tableName]
 
-        val partitionKeyName = tableMetadata?.partitionKey ?: return PutItemResponse.builder().build()
-        val partitionKey = getKeyFromMetadata(partitionKeyName, request.item())
-
-        val sortKey = getSortKeyFromMetadata(tableMetadata.sortKey, request.item())
+        val (partitionKey, sortKey) = getRequestMetadata(tableName, request.item())
 
         val itemsList = request.item().map { (k, v) ->
             val (type, value) = convertAttributeValueToInfo(v)
-            requireNotNull(type) {"No such AttributeValue type"}
-            requireNotNull(value) {"No such AttributeValue type"}
-
             AttributeInfo(k, type, value.toString())
-        }.toList()
+        }
 
         val attributes = when (request.returnValues()) {
             ReturnValue.ALL_OLD -> {
@@ -104,12 +98,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
     fun getItem(request: GetItemRequest): GetItemResponse {
         val tableName = request.tableName()
-        val tableMetadata = tablesMetadata[tableName]
-
-        val partitionKeyName = tableMetadata?.partitionKey ?: return GetItemResponse.builder().build()
-        val partitionKey = getKeyFromMetadata(partitionKeyName, request.key())
-
-        val sortKey = getSortKeyFromMetadata(tableMetadata.sortKey, request.key())
+        val (partitionKey, sortKey) = getRequestMetadata(tableName, request.key())
 
         val response = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))
 
@@ -125,12 +114,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
     fun deleteItem(request: DeleteItemRequest): DeleteItemResponse {
         val tableName = request.tableName()
-        val tableMetadata = tablesMetadata[tableName]
-
-        val partitionKeyName = tableMetadata?.partitionKey ?: return DeleteItemResponse.builder().build()
-        val partitionKey = getKeyFromMetadata(partitionKeyName, request.key())
-
-        val sortKey = getSortKeyFromMetadata(tableMetadata.sortKey, request.key())
+        val (partitionKey, sortKey) = getRequestMetadata(tableName, request.key())
 
         val attributes = when (request.returnValues()) {
             ReturnValue.ALL_OLD -> {
@@ -153,23 +137,24 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         val partitionKeyAttributeValue = checkNotNull(keys[partitionKeyName])
         val (partitionKeyType, partitionKeyValue) = convertAttributeValueToInfo(partitionKeyAttributeValue)
 
-        requireNotNull(partitionKeyType) {"No such AttributeValue type"}
-        requireNotNull(partitionKeyValue) {"No such AttributeValue type"}
-
         return when (partitionKeyType) {
             "N" -> NumKey(partitionKeyName, partitionKeyValue.toString().toBigDecimal())
             else -> StringKey(partitionKeyName, partitionKeyValue.toString())
         }
     }
 
-    private fun getSortKeyFromMetadata(sortKeyName: String?, keys: Map<String, AttributeValue>): Key? =
-        if (sortKeyName != null) {
-            val sortKeyAttributeValue = keys[sortKeyName]
-            if (sortKeyAttributeValue == null) {
-                null
-            } else {
-                getKeyFromMetadata(sortKeyName, keys)
-            }
-        } else null
+    private fun getSortKeyFromMetadata(sortKeyName: String?, keys: Map<String, AttributeValue>): Key? {
+        sortKeyName ?: return null
+        val sortKeyAttributeValue = keys[sortKeyName]
+        sortKeyAttributeValue ?: return null
 
+        return getKeyFromMetadata(sortKeyName, keys)
+    }
+
+    private fun getRequestMetadata(tableName: String, keys: Map<String, AttributeValue>): Pair<Key, Key?> {
+        val tableMetadata = tablesMetadata.getValue(tableName)
+
+        val partitionKeyName = checkNotNull(tableMetadata.partitionKey)
+        return getKeyFromMetadata(partitionKeyName, keys) to getSortKeyFromMetadata(tableMetadata.sortKey, keys)
+    }
 }

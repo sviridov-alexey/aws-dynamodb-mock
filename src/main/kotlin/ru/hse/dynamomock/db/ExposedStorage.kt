@@ -56,10 +56,10 @@ class ExposedStorage(
     }
 
     override fun putItem(request: DBPutItemRequest) {
+        val table = checkNotNull(tables[request.tableName])
         transaction(database) {
-            val table = checkNotNull(tables[request.tableName])
             table.insert { item ->
-                item[attributes] = Json.encodeToString(request.items)
+                item[attributes] = Json.encodeToString(request.fieldValues)
                 when (request.partitionKey) {
                     is StringKey -> item[stringPartitionKey] = request.partitionKey.attributeValue
                     is NumKey -> item[numPartitionKey] = request.partitionKey.attributeValue
@@ -76,19 +76,19 @@ class ExposedStorage(
     }
 
     override fun updateItem(request: DBUpdateItemRequest) {
+        val table = checkNotNull(tables[request.tableName])
         transaction(database) {
-            val table = checkNotNull(tables[request.tableName])
             val condition = createKeyCondition(table, request.partitionKey, request.sortKey)
             table.update(condition) {
-                it[attributes] = Json.encodeToString(request.items)
+                it[attributes] = Json.encodeToString(request.fieldValues)
             }
         }
     }
 
     override fun getItem(request: DBGetItemRequest): List<AttributeInfo>? {
         val item = mutableListOf<AttributeInfo>()
+        val table = checkNotNull(tables[request.tableName])
         transaction(database) {
-            val table = checkNotNull(tables[request.tableName])
             val condition = createKeyCondition(table, request.partitionKey, request.sortKey)
             val info = table.select{condition()}
 
@@ -101,8 +101,8 @@ class ExposedStorage(
     }
 
     override fun deleteItem(request: DBDeleteItemRequest) {
+        val table = checkNotNull(tables[request.tableName])
         transaction(database) {
-            val table = checkNotNull(tables[request.tableName])
             val condition = createKeyCondition(table, request.partitionKey, request.sortKey)
             table.deleteWhere {condition()}
         }
