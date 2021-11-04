@@ -30,6 +30,13 @@ class AWSDynamoDBMock : DynamoDbClient {
             .build()
     }
 
+    override fun describeTable(describeTableRequest: DescribeTableRequest): DescribeTableResponse {
+        val description = service.describeTable(describeTableRequest)
+        return DescribeTableResponse.builder()
+            .table(description)
+            .build()
+    }
+
     override fun putItem(putItemRequest: PutItemRequest): PutItemResponse {
         return service.putItem(putItemRequest)
     }

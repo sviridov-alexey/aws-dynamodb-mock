@@ -65,6 +65,14 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         return tablesMetadata.remove(name)!!.toTableDescription()
     }
 
+    fun describeTable(request: DescribeTableRequest): TableDescription {
+        val name = request.tableName()
+        require(name in tablesMetadata) {
+            "Cannot describe non-existent table."
+        }
+        return tablesMetadata.getValue(name).toTableDescription()
+    }
+
     fun putItem(request: PutItemRequest): PutItemResponse {
         val tableName = request.tableName()
 

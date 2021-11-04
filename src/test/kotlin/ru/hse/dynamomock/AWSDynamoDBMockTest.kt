@@ -3,17 +3,7 @@ package ru.hse.dynamomock
 import org.junit.jupiter.api.BeforeEach
 import ru.hse.dynamomock.model.TableMetadata
 import software.amazon.awssdk.core.SdkBytes
-import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition
-import software.amazon.awssdk.services.dynamodb.model.AttributeValue
-import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest
-import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest
-import software.amazon.awssdk.services.dynamodb.model.DeleteTableRequest
-import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
-import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement
-import software.amazon.awssdk.services.dynamodb.model.KeyType
-import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
-import software.amazon.awssdk.services.dynamodb.model.ReturnValue
-import software.amazon.awssdk.services.dynamodb.model.TableStatus
+import software.amazon.awssdk.services.dynamodb.model.*
 import java.time.Instant
 import kotlin.properties.Delegates
 import kotlin.random.Random
@@ -38,6 +28,10 @@ internal open class AWSDynamoDBMockTest {
         ).build()
 
     protected fun TableMetadata.toDeleteTableRequest(): DeleteTableRequest = DeleteTableRequest.builder()
+        .tableName(tableName)
+        .build()
+
+    protected fun TableMetadata.toDescribeTableRequest(): DescribeTableRequest = DescribeTableRequest.builder()
         .tableName(tableName)
         .build()
 
