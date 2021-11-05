@@ -8,7 +8,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.*
 
 class AWSDynamoDBMock : DynamoDbClient {
-    private val service by lazy { AWSDynamoDBMockService(ExposedStorage(DATABASE_NAME)) }
+    private val service by lazy { AWSDynamoDBMockService(ExposedStorage()) }
 
     override fun close() {
         TODO("Not yet implemented")
@@ -51,6 +51,5 @@ class AWSDynamoDBMock : DynamoDbClient {
 
     companion object {
         private const val SERVICE_NAME = "dynamodb"
-        private const val DATABASE_NAME = "testDB"
     }
 }

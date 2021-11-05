@@ -7,15 +7,12 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import ru.hse.dynamomock.model.*
 import ru.hse.dynamomock.model.Key
+import java.util.UUID
 
-@Suppress("unused")
-class ExposedStorage(
-    dbname: String,
-    username: String = "sa",
-    password: String = ""
-) : DataStorageLayer {
+class ExposedStorage : DataStorageLayer {
     private val database =
-        Database.connect("jdbc:h2:mem:$dbname;DB_CLOSE_DELAY=-1", "org.h2.Driver", username, password)
+        Database.connect("jdbc:h2:mem:${UUID.randomUUID()};DB_CLOSE_DELAY=-1", "org.h2.Driver", "sa", "")
+
     private val tables = mutableMapOf<String, DynamoTable>()
 
     override fun createTable(tableMetadata: TableMetadata) {
