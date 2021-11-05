@@ -136,13 +136,15 @@ internal open class AWSDynamoDBMockTest {
         @JvmStatic
         protected fun createTableMetadata(
             name: String,
-            attributesIndices: Iterable<Int>,
             partitionKeyIndex: Int,
             sortKeyIndex: Int?,
             creationDateTime: Instant
         ) = TableMetadata(
             name,
-            attributeDefinitionPool.withIndex().filter { (i, _) -> i in attributesIndices }.map { (_, x) -> x },
+            listOfNotNull(
+                attributeDefinitionPool[partitionKeyIndex],
+                sortKeyIndex?.let { attributeDefinitionPool[it] }
+            ),
             attributeDefinitionPool[partitionKeyIndex].attributeName(),
             sortKeyIndex?.let { attributeDefinitionPool[it].attributeName() },
             TableStatus.ACTIVE,
@@ -151,18 +153,19 @@ internal open class AWSDynamoDBMockTest {
 
         @JvmStatic
         protected val metadataPool = listOf(
-            createTableMetadata("metadata_First1", listOf(1, 4, 8, 9), 8, 1, Instant.ofEpochMilli(2103102401234)),
-            createTableMetadata("otHerMeta__data", 1..14, 13, null, Instant.ofEpochMilli(11111)),
-            createTableMetadata("kek_lol239_kek", 2..5, 5, 5, Instant.now()),
-            createTableMetadata("wow_wow_WoW", listOf(13, 12, 9, 14), 9, null, Instant.now()),
-            createTableMetadata("save_me._.pls", listOf(9, 1, 8, 2), 2, null, Instant.ofEpochMilli(432534634)),
-            createTableMetadata("ANOTHER.._AAAA", listOf(1, 14), 1, 1, Instant.now()),
-            createTableMetadata("ke.k1e_ke", 7..10, 7, null, Instant.ofEpochMilli(991222222222222)),
-            createTableMetadata("SantaClaus", listOf(1, 2, 7, 3, 10, 8), 10, 8, Instant.ofEpochMilli(666)),
+            createTableMetadata("metadata_First1", 8, 1, Instant.ofEpochMilli(2103102401234)),
+            createTableMetadata("otHerMeta__data", 13, null, Instant.ofEpochMilli(11111)),
+            createTableMetadata("kek_lol239_kek", 5, 5, Instant.now()),
+            createTableMetadata("wow_wow_WoW", 9, null, Instant.now()),
+            createTableMetadata("save_me._.pls", 2, null, Instant.ofEpochMilli(432534634)),
+            createTableMetadata("ANOTHER.._AAAA", 1, 11, Instant.now()),
+            createTableMetadata("ke.k1e_ke", 7, null, Instant.ofEpochMilli(991222222222222)),
+            createTableMetadata("SantaClaus", 10, 8, Instant.ofEpochMilli(666)),
+            createTableMetadata("El_lik_sir", 2, 7, Instant.ofEpochMilli(666)),
         ) + attributeDefinitionPool.indices.flatMap { i ->
             listOf(
-                createTableMetadata("TEST_N_$i", listOf(i), i, null, Instant.ofEpochMilli(123241424222 * i)),
-                createTableMetadata("TEST_M_$i", listOf(i), i, i, Instant.ofEpochMilli(9472938474 * i + 2))
+                createTableMetadata("TEST_N_$i", i, null, Instant.ofEpochMilli(123241424222 * i)),
+                createTableMetadata("TEST_M_$i", i, i, Instant.ofEpochMilli(9472938474 * i + 2))
             )
         }
     }
