@@ -7,7 +7,8 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import ru.hse.dynamomock.model.*
 import ru.hse.dynamomock.model.Key
-import java.util.UUID
+import java.security.MessageDigest
+import java.util.*
 
 class ExposedStorage : DataStorageLayer {
     private val database =
@@ -16,20 +17,22 @@ class ExposedStorage : DataStorageLayer {
     private val tables = mutableMapOf<String, DynamoTable>()
 
     override fun createTable(tableMetadata: TableMetadata) {
-        require(tableMetadata.tableName !in tables) {
-            "Table ${tableMetadata.tableName} already exists. Cannot create."
+        val name = hashTableName(tableMetadata.tableName)
+        require(name !in tables) {
+            "Table $name already exists. Cannot create."
         }
         val table = DynamoTable(tableMetadata)
         transaction(database) { SchemaUtils.create(table) }
-        tables[tableMetadata.tableName] = table
+        tables[name] = table
     }
 
     override fun deleteTable(tableName: String) {
-        require(tableName in tables) {
+        val name = hashTableName(tableName)
+        require(name in tables) {
             "Cannot delete non-existent table."
         }
-        transaction(database) { SchemaUtils.drop(tables.getValue(tableName)) }
-        tables.remove(tableName)
+        transaction(database) { SchemaUtils.drop(tables.getValue(name)) }
+        tables.remove(name)
     }
 
     private fun createKeyCondition(
@@ -54,7 +57,7 @@ class ExposedStorage : DataStorageLayer {
     }
 
     override fun putItem(request: DBPutItemRequest) {
-        val table = checkNotNull(tables[request.tableName])
+        val table = checkNotNull(tables[hashTableName(request.tableName)])
         transaction(database) {
             table.insert { item ->
                 item[attributes] = Json.encodeToString(request.fieldValues)
@@ -74,7 +77,7 @@ class ExposedStorage : DataStorageLayer {
     }
 
     override fun updateItem(request: DBUpdateItemRequest) {
-        val table = checkNotNull(tables[request.tableName])
+        val table = checkNotNull(tables[hashTableName(request.tableName)])
         transaction(database) {
             val condition = createKeyCondition(table, request.partitionKey, request.sortKey)
             table.update(condition) {
@@ -85,7 +88,7 @@ class ExposedStorage : DataStorageLayer {
 
     override fun getItem(request: DBGetItemRequest): List<AttributeInfo>? {
         val item = mutableListOf<AttributeInfo>()
-        val table = checkNotNull(tables[request.tableName])
+        val table = checkNotNull(tables[hashTableName(request.tableName)])
         transaction(database) {
             val condition = createKeyCondition(table, request.partitionKey, request.sortKey)
             val info = table.select{condition()}
@@ -99,14 +102,14 @@ class ExposedStorage : DataStorageLayer {
     }
 
     override fun deleteItem(request: DBDeleteItemRequest) {
-        val table = checkNotNull(tables[request.tableName])
+        val table = checkNotNull(tables[hashTableName(request.tableName)])
         transaction(database) {
             val condition = createKeyCondition(table, request.partitionKey, request.sortKey)
             table.deleteWhere {condition()}
         }
     }
 
-    class DynamoTable(metadata: TableMetadata) : Table(metadata.tableName) {
+    private class DynamoTable(metadata: TableMetadata) : Table(hashTableName(metadata.tableName)) {
         private val id = integer("id").autoIncrement()
         val attributes = text("attributes")
         val stringPartitionKey = text("stringPartitionKey").nullable().default(null)
@@ -115,5 +118,10 @@ class ExposedStorage : DataStorageLayer {
         val numSortKey = decimal("numSortKey", 20, 0).nullable().default(null)
 
         override val primaryKey: PrimaryKey = PrimaryKey(id)
+    }
+
+    companion object {
+        private fun hashTableName(name: String): String =
+            MessageDigest.getInstance("MD5").digest(name.toByteArray()).contentToString()
     }
 }

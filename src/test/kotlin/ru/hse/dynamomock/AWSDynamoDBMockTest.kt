@@ -155,9 +155,9 @@ internal open class AWSDynamoDBMockTest {
             createTableMetadata("otHerMeta__data", 1..14, 13, null, Instant.ofEpochMilli(11111)),
             createTableMetadata("kek_lol239_kek", 2..5, 5, 5, Instant.now()),
             createTableMetadata("wow_wow_WoW", listOf(13, 12, 9, 14), 9, null, Instant.now()),
-            createTableMetadata("save_me_pls", listOf(9, 1, 8, 2), 2, null, Instant.ofEpochMilli(432534634)),
-            createTableMetadata("ANOTHER_AAAA", listOf(1, 14), 1, 1, Instant.now()),
-            createTableMetadata("kek1e_ke", 7..10, 7, null, Instant.ofEpochMilli(991222222222222)),
+            createTableMetadata("save_me._.pls", listOf(9, 1, 8, 2), 2, null, Instant.ofEpochMilli(432534634)),
+            createTableMetadata("ANOTHER.._AAAA", listOf(1, 14), 1, 1, Instant.now()),
+            createTableMetadata("ke.k1e_ke", 7..10, 7, null, Instant.ofEpochMilli(991222222222222)),
             createTableMetadata("SantaClaus", listOf(1, 2, 7, 3, 10, 8), 10, 8, Instant.ofEpochMilli(666)),
         ) + attributeDefinitionPool.indices.flatMap { i ->
             listOf(
