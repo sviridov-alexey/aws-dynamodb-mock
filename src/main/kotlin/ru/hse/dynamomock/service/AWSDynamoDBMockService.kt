@@ -5,6 +5,7 @@ import ru.hse.dynamomock.model.*
 import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.services.dynamodb.model.*
 import java.lang.IllegalArgumentException
+import java.lang.IllegalStateException
 import java.util.Base64
 
 class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
@@ -141,13 +142,14 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             .build()
     }
 
-    private fun getKeyFromMetadata(partitionKeyName: String, keys: Map<String, AttributeValue>): Key {
-        val partitionKeyAttributeValue = checkNotNull(keys[partitionKeyName])
-        val (partitionKeyType, partitionKeyValue) = convertAttributeValueToInfo(partitionKeyAttributeValue)
+    private fun getKeyFromMetadata(keyName: String, keys: Map<String, AttributeValue>): Key {
+        val keyAttributeValue = checkNotNull(keys[keyName])
+        val (keyType, keyValue) = convertAttributeValueToInfo(keyAttributeValue)
 
-        return when (partitionKeyType) {
-            "N" -> NumKey(partitionKeyName, partitionKeyValue.toString().toBigDecimal())
-            else -> StringKey(partitionKeyName, partitionKeyValue.toString())
+        return when (keyType) {
+            "N" -> NumKey(keyName, keyValue.toString().toBigDecimal())
+            "S", "B" -> StringKey(keyName, keyValue.toString())
+            else -> throw IllegalStateException("Type $keyType is not supported in key")
         }
     }
 
