@@ -57,7 +57,7 @@ class ExposedStorage : DataStorageLayer {
     }
 
     override fun putItem(request: DBPutItemRequest) {
-        val table = checkNotNull(tables[hashTableName(request.tableName)])
+        val table = tables.getValue(hashTableName(request.tableName))
         transaction(database) {
             table.insert { item ->
                 item[attributes] = Json.encodeToString(request.fieldValues)
@@ -77,7 +77,7 @@ class ExposedStorage : DataStorageLayer {
     }
 
     override fun updateItem(request: DBUpdateItemRequest) {
-        val table = checkNotNull(tables[hashTableName(request.tableName)])
+        val table = tables.getValue(hashTableName(request.tableName))
         transaction(database) {
             val condition = createKeyCondition(table, request.partitionKey, request.sortKey)
             table.update(condition) {
@@ -88,7 +88,7 @@ class ExposedStorage : DataStorageLayer {
 
     override fun getItem(request: DBGetItemRequest): List<AttributeInfo>? {
         val item = mutableListOf<AttributeInfo>()
-        val table = checkNotNull(tables[hashTableName(request.tableName)])
+        val table = tables.getValue(hashTableName(request.tableName))
         transaction(database) {
             val condition = createKeyCondition(table, request.partitionKey, request.sortKey)
             val info = table.select{condition()}
@@ -102,7 +102,7 @@ class ExposedStorage : DataStorageLayer {
     }
 
     override fun deleteItem(request: DBDeleteItemRequest) {
-        val table = checkNotNull(tables[hashTableName(request.tableName)])
+        val table = tables.getValue(hashTableName(request.tableName))
         transaction(database) {
             val condition = createKeyCondition(table, request.partitionKey, request.sortKey)
             table.deleteWhere {condition()}

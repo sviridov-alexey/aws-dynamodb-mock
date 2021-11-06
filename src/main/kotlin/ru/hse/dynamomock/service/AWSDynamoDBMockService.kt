@@ -90,7 +90,8 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                     it.name to toAttributeValue(it.type)
                 }
             }
-            else -> null
+            ReturnValue.NONE, null -> null
+            else -> throw DynamoDbException.builder().message("Return values set to invalid value").build()
         }
 
         if (attributes != null) {
@@ -129,7 +130,8 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                     it.name to toAttributeValue(it.type)
                 }
             }
-            else -> null
+            ReturnValue.NONE, null -> null
+            else -> throw DynamoDbException.builder().message("Return values set to invalid value").build()
         }
 
         storage.deleteItem(DBDeleteItemRequest(tableName, partitionKey, sortKey))
@@ -140,7 +142,11 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     }
 
     private fun getKeyFromMetadata(keyName: String, keys: Map<String, AttributeValue>): Key {
-        val keyAttributeValue = checkNotNull(keys[keyName])
+        val keyAttributeValue =
+            keys[keyName] ?: throw DynamoDbException
+                .builder()
+                .message("One of the required keys was not given a value")
+                .build()
         return toKey(keyName, keyAttributeValue)
     }
 
