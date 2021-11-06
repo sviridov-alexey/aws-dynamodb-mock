@@ -4,8 +4,6 @@ import ru.hse.dynamomock.db.DataStorageLayer
 import ru.hse.dynamomock.model.*
 import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.services.dynamodb.model.*
-import java.lang.IllegalArgumentException
-import java.lang.IllegalStateException
 import java.util.Base64
 
 class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
@@ -47,7 +45,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         } else if (attributeValue.b() != null) {
             StringKey(keyName, Base64.getEncoder().encodeToString(attributeValue.b().asByteArray()))
         } else {
-            throw IllegalArgumentException("Key supports only S, N and B types!")
+            throw DynamoDbException.builder().message("Member must satisfy enum value set: [B, N, S]").build()
         }
 
     fun createTable(request: CreateTableRequest): TableDescription {
@@ -84,15 +82,10 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
         val itemsList = request.item().map { (k, v) -> AttributeInfo(k, toAttributeTypeInfo(v)) }
 
-        val attributes = when (request.returnValues()) {
-            ReturnValue.ALL_OLD -> {
-                storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))?.associate {
-                    it.name to toAttributeValue(it.type)
-                }
-            }
-            ReturnValue.NONE, null -> null
-            else -> throw DynamoDbException.builder().message("Return values set to invalid value").build()
-        }
+        val attributes = getAttributesFromReturnValues(
+            request.returnValues(),
+            DBGetItemRequest(tableName, partitionKey, sortKey)
+        )
 
         if (attributes != null) {
             storage.updateItem(DBUpdateItemRequest(tableName, partitionKey, sortKey, itemsList))
@@ -124,15 +117,10 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         val tableName = request.tableName()
         val (partitionKey, sortKey) = getRequestMetadata(tableName, request.key())
 
-        val attributes = when (request.returnValues()) {
-            ReturnValue.ALL_OLD -> {
-                storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))?.associate {
-                    it.name to toAttributeValue(it.type)
-                }
-            }
-            ReturnValue.NONE, null -> null
-            else -> throw DynamoDbException.builder().message("Return values set to invalid value").build()
-        }
+        val attributes = getAttributesFromReturnValues(
+            request.returnValues(),
+            DBGetItemRequest(tableName, partitionKey, sortKey)
+        )
 
         storage.deleteItem(DBDeleteItemRequest(tableName, partitionKey, sortKey))
 
@@ -164,4 +152,16 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         val partitionKeyName = checkNotNull(tableMetadata.partitionKey)
         return getKeyFromMetadata(partitionKeyName, keys) to getSortKeyFromMetadata(tableMetadata.sortKey, keys)
     }
+
+    private fun getAttributesFromReturnValues(returnValues: ReturnValue?, request: DBGetItemRequest): Map<String, AttributeValue>? =
+        when (returnValues) {
+            ReturnValue.ALL_OLD -> {
+                storage.getItem(request)?.associate {
+                    it.name to toAttributeValue(it.type)
+                }
+            }
+            ReturnValue.NONE, null -> null
+            else -> throw DynamoDbException.builder().message("Return values set to invalid value").build()
+        }
+
 }
