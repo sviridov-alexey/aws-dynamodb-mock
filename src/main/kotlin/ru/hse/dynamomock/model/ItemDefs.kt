@@ -40,9 +40,23 @@ data class DBUpdateItemRequest(
 
 @Serializable
 data class AttributeInfo(
-    val attributeName: String,
-    val attributeType: String,
-    val attributeValue: String
+    val name: String,
+    val type: AttributeTypeInfo
+)
+
+@Serializable
+data class AttributeTypeInfo(
+    val s: String?,
+    val n: String?,
+    val b : String?,
+    val ss: List<String>?,
+    val ns: List<String>?,
+    val bs: List<String>?,
+    val m: Map<String, AttributeTypeInfo>?,
+    val l: List<AttributeTypeInfo>?,
+    val bool: Boolean?,
+    val nul: Boolean?
+
 )
 
 sealed class Key(

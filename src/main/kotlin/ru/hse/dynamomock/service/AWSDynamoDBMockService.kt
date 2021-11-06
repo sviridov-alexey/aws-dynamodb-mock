@@ -11,41 +11,44 @@ import java.util.Base64
 class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     private val tablesMetadata = mutableMapOf<String, TableMetadata>()
 
-    private fun convertAttributeValueToInfo(attributeValue: AttributeValue): Pair<String, Any> =
-        if (attributeValue.bool() != null) {
-            "BOOL" to attributeValue.bool()
-        } else if (attributeValue.s() != null) {
-            "S" to attributeValue.s()
-        } else if (attributeValue.n() != null) {
-            "N" to attributeValue.n()
-        } else if (attributeValue.hasSs()) {
-            "SS" to attributeValue.ss()
-        } else if (attributeValue.hasNs()) {
-            "NS" to attributeValue.ns()
-        } else if (attributeValue.hasBs()) {
-            "BS" to attributeValue.bs()
-        } else if (attributeValue.b() != null) {
-            "B" to Base64.getEncoder().encodeToString(attributeValue.b().asByteArray())
-        } else if (attributeValue.hasM()) {
-            "M" to attributeValue.m()
-        } else if (attributeValue.hasL()) {
-            "L" to attributeValue.l()
-        } else if (attributeValue.nul() != null) {
-            "NUL" to attributeValue.nul().toString()
-        } else {
-            throw IllegalArgumentException("No such AttributeValue type")
-        }
+    private fun toAttributeTypeInfo(value: AttributeValue) : AttributeTypeInfo =
+        AttributeTypeInfo(
+            s = value.s(),
+            n = value.n(),
+            b = value.b()?.let { Base64.getEncoder().encodeToString(value.b().asByteArray()) },
+            ss = if (value.hasSs()) value.ss() else null,
+            ns = if (value.hasNs()) value.ns() else null,
+            bs = if (value.hasBs()) value.bs().map {  Base64.getEncoder().encodeToString(it.asByteArray()) } else null,
+            m = if (value.hasM()) value.m().mapValues { toAttributeTypeInfo(it.value) } else null,
+            l = if (value.hasL()) value.l()?.map { toAttributeTypeInfo(it) } else null,
+            bool = value.bool(),
+            nul = value.nul()
+        )
 
-    private fun convertAttributeInfoToValue(attributeInfo: AttributeInfo): Pair<String, AttributeValue> {
-        return when (attributeInfo.attributeType) {
-            "S" -> Pair(attributeInfo.attributeName, AttributeValue.builder().s(attributeInfo.attributeValue).build())
-            "N" -> Pair(attributeInfo.attributeName, AttributeValue.builder().n(attributeInfo.attributeValue).build())
-            "SS" -> Pair(attributeInfo.attributeName, AttributeValue.builder().ss(attributeInfo.attributeValue).build())
-            "BOOL" -> Pair(attributeInfo.attributeName, AttributeValue.builder().bool(attributeInfo.attributeValue.toBoolean()).build())
-            "B" -> Pair(attributeInfo.attributeName, AttributeValue.builder().b(SdkBytes.fromByteArray(Base64.getDecoder().decode(attributeInfo.attributeValue))).build())
-            else -> Pair(attributeInfo.attributeName, AttributeValue.builder().s(attributeInfo.attributeValue).build())
+    private fun toAttributeValue(info: AttributeTypeInfo) : AttributeValue =
+        AttributeValue.builder()
+            .s(info.s)
+            .n(info.n)
+            .b(info.b?.let { SdkBytes.fromByteArray(Base64.getDecoder().decode(info.b)) })
+            .ss(info.ss)
+            .ns(info.ns)
+            .bs(info.bs?.map { SdkBytes.fromByteArray(Base64.getDecoder().decode(it)) })
+            .m(info.m?.mapValues { toAttributeValue(it.value) })
+            .l(info.l?.map { toAttributeValue(it) })
+            .bool(info.bool)
+            .nul(info.nul)
+            .build()
+
+    private fun toKey(keyName: String, attributeValue: AttributeValue): Key =
+        if (attributeValue.s() != null) {
+            StringKey(keyName, attributeValue.s())
+        } else if (attributeValue.n() != null) {
+            NumKey(keyName, attributeValue.n().toBigDecimal())
+        } else if (attributeValue.b() != null) {
+            StringKey(keyName, Base64.getEncoder().encodeToString(attributeValue.b().asByteArray()))
+        } else {
+            throw IllegalArgumentException("Key supports only S, N and B types!")
         }
-    }
 
     fun createTable(request: CreateTableRequest): TableDescription {
         require(request.tableName() !in tablesMetadata) {
@@ -79,16 +82,12 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
         val (partitionKey, sortKey) = getRequestMetadata(tableName, request.item())
 
-        val itemsList = request.item().map { (k, v) ->
-            val (type, value) = convertAttributeValueToInfo(v)
-            AttributeInfo(k, type, value.toString())
-        }
+        val itemsList = request.item().map { (k, v) -> AttributeInfo(k, toAttributeTypeInfo(v)) }
 
         val attributes = when (request.returnValues()) {
             ReturnValue.ALL_OLD -> {
                 storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))?.associate {
-                    val (name, value) = convertAttributeInfoToValue(it)
-                    name to value
+                    it.name to toAttributeValue(it.type)
                 }
             }
             else -> null
@@ -111,9 +110,8 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
         val response = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))
 
-        val item = response?.filter { request.attributesToGet().contains(it.attributeName) }?.associate {
-            val (name, value) = convertAttributeInfoToValue(it)
-            name to value
+        val item = response?.filter { request.attributesToGet().contains(it.name) }?.associate {
+            it.name to toAttributeValue(it.type)
         }
 
         return GetItemResponse.builder()
@@ -128,8 +126,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         val attributes = when (request.returnValues()) {
             ReturnValue.ALL_OLD -> {
                 storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))?.associate {
-                    val (name, value) = convertAttributeInfoToValue(it)
-                    name to value
+                    it.name to toAttributeValue(it.type)
                 }
             }
             else -> null
@@ -144,13 +141,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
     private fun getKeyFromMetadata(keyName: String, keys: Map<String, AttributeValue>): Key {
         val keyAttributeValue = checkNotNull(keys[keyName])
-        val (keyType, keyValue) = convertAttributeValueToInfo(keyAttributeValue)
-
-        return when (keyType) {
-            "N" -> NumKey(keyName, keyValue.toString().toBigDecimal())
-            "S", "B" -> StringKey(keyName, keyValue.toString())
-            else -> throw IllegalStateException("Type $keyType is not supported in key")
-        }
+        return toKey(keyName, keyAttributeValue)
     }
 
     private fun getSortKeyFromMetadata(sortKeyName: String?, keys: Map<String, AttributeValue>): Key? {
