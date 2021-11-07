@@ -7,6 +7,7 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import ru.hse.dynamomock.model.*
 import ru.hse.dynamomock.model.Key
+import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException
 import java.security.MessageDigest
 import java.util.*
 
@@ -52,12 +53,11 @@ class ExposedStorage : DataStorageLayer {
                 is NumKey -> table.numSortKey eq it.attributeValue
             }
         }
-
         if (sortOp == null) partitionOp else partitionOp and sortOp
     }
 
     override fun putItem(request: DBPutItemRequest) {
-        val table = tables.getValue(hashTableName(request.tableName))
+        val table = getTable(request.tableName)
         transaction(database) {
             table.insert { item ->
                 item[attributes] = Json.encodeToString(request.fieldValues)
@@ -77,7 +77,7 @@ class ExposedStorage : DataStorageLayer {
     }
 
     override fun updateItem(request: DBUpdateItemRequest) {
-        val table = tables.getValue(hashTableName(request.tableName))
+        val table = getTable(request.tableName)
         transaction(database) {
             val condition = createKeyCondition(table, request.partitionKey, request.sortKey)
             table.update(condition) {
@@ -87,11 +87,11 @@ class ExposedStorage : DataStorageLayer {
     }
 
     override fun getItem(request: DBGetItemRequest): List<AttributeInfo>? {
+        val table = getTable(request.tableName)
         val item = mutableListOf<AttributeInfo>()
-        val table = tables.getValue(hashTableName(request.tableName))
         transaction(database) {
             val condition = createKeyCondition(table, request.partitionKey, request.sortKey)
-            val info = table.select{condition()}
+            val info = table.select { condition() }
 
             val foundItem = info.firstOrNull()
             if (foundItem != null)
@@ -105,8 +105,13 @@ class ExposedStorage : DataStorageLayer {
         val table = tables.getValue(hashTableName(request.tableName))
         transaction(database) {
             val condition = createKeyCondition(table, request.partitionKey, request.sortKey)
-            table.deleteWhere {condition()}
+            table.deleteWhere { condition() }
         }
+    }
+
+    private fun getTable(tableName: String): DynamoTable {
+        return tables[hashTableName(tableName)] ?: throw ResourceNotFoundException.builder()
+            .message(" Cannot do operations on a non-existent table").build()
     }
 
     private class DynamoTable(metadata: TableMetadata) : Table(hashTableName(metadata.tableName)) {

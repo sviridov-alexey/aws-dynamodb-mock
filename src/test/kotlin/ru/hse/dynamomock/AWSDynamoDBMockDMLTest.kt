@@ -13,6 +13,7 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest
 import software.amazon.awssdk.services.dynamodb.model.DynamoDbException
 import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement
+import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException
 
 import software.amazon.awssdk.services.dynamodb.model.ReturnValue
 import kotlin.random.Random
@@ -181,6 +182,8 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             .associate { it.key to it.value }
 
         mock.putItem(putItemRequestBuilder(tableName, item))
+        val getResponse = mock.getItem(getItemRequestBuilder(tableName, item.keys.toList(), keys))
+        assertTrue(getResponse.item().isNotEmpty())
         mock.deleteItem(deleteItemRequestBuilder(tableName, keys))
         val response = mock.getItem(
             getItemRequestBuilder(
@@ -224,5 +227,65 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         )
         val request = putItemRequestBuilder(tableName, item)
         assertThrows<DynamoDbException> {  mock.putItem(request) }
+    }
+
+    @Test
+    fun `test wrong table name`() {
+        val item = mapOf(
+            partitionKeyName to AttributeValue.builder().s("key2").build(),
+            sortKeyName to AttributeValue.builder().n("2").build(),
+            "column3" to AttributeValue.builder().s("i am string").build(),
+            "column4" to AttributeValue.builder().ss(listOf("we", "are", "strings")).build()
+        )
+        val request = putItemRequestBuilder("wrongTableName", item)
+        assertThrows<ResourceNotFoundException> {  mock.putItem(request) }
+    }
+
+    @Test
+    fun `test different sort keys`() {
+        val item = mapOf(
+            partitionKeyName to AttributeValue.builder().s("key2").build(),
+            sortKeyName to AttributeValue.builder().n("2").build(),
+            "column3" to AttributeValue.builder().s("i am string").build()
+        )
+
+        val newKeys = mapOf(
+            partitionKeyName to AttributeValue.builder().s("key2").build(),
+            sortKeyName to AttributeValue.builder().n("3").build()
+        )
+
+        val request = putItemRequestBuilder(tableName, item)
+        mock.putItem(request)
+
+        val response = mock.getItem(getItemRequestBuilder(
+            tableName,
+            newKeys.keys.toList(),
+            newKeys
+        ))
+        assertTrue(response.item().isEmpty())
+    }
+
+    @Test
+    fun `test different partition keys`() {
+        val item = mapOf(
+            partitionKeyName to AttributeValue.builder().s("key2").build(),
+            sortKeyName to AttributeValue.builder().n("2").build(),
+            "column3" to AttributeValue.builder().s("i am string").build()
+        )
+
+        val newKeys = mapOf(
+            partitionKeyName to AttributeValue.builder().s("different key").build(),
+            sortKeyName to AttributeValue.builder().n("2").build()
+        )
+
+        val request = putItemRequestBuilder(tableName, item)
+        mock.putItem(request)
+
+        val response = mock.getItem(getItemRequestBuilder(
+            tableName,
+            newKeys.keys.toList(),
+            newKeys
+        ))
+        assertTrue(response.item().isEmpty())
     }
 }

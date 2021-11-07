@@ -147,9 +147,10 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     }
 
     private fun getRequestMetadata(tableName: String, keys: Map<String, AttributeValue>): Pair<Key, Key?> {
-        val tableMetadata = tablesMetadata.getValue(tableName)
+        val tableMetadata = tablesMetadata[tableName] ?: throw ResourceNotFoundException.builder()
+            .message(" Cannot do operations on a non-existent table").build()
 
-        val partitionKeyName = checkNotNull(tableMetadata.partitionKey)
+        val partitionKeyName = tableMetadata.partitionKey
         return getKeyFromMetadata(partitionKeyName, keys) to getSortKeyFromMetadata(tableMetadata.sortKey, keys)
     }
 
