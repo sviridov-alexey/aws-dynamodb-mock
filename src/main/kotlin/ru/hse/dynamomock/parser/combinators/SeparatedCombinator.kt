@@ -14,17 +14,19 @@ internal class SeparatedCombinator<T>(
     override fun parse(tokens: List<ParsedToken>, fromIndex: Int): ParseResult<List<T>> {
         val values = mutableListOf<T>()
         var nextPosition = fromIndex
+        var returnPosition = fromIndex
         while (true) {
             when (val itemResult = item.parse(tokens, nextPosition)) {
                 is SuccessfulParse -> {
                     values += itemResult.value
-                    when (val sepResult = separator.parse(tokens, itemResult.nextPosition)) {
-                        is SuccessfulParse -> nextPosition = sepResult.nextPosition
+                    returnPosition = itemResult.nextPosition
+                    when (val separatorResult = separator.parse(tokens, itemResult.nextPosition)) {
+                        is SuccessfulParse -> nextPosition = separatorResult.nextPosition
                         is FailedParse -> return ParsedValue(values, itemResult.nextPosition)
                     }
                 }
                 is FailedParse -> {
-                    return if (values.isEmpty() && !allowEmpty) itemResult else ParsedValue(values, nextPosition)
+                    return if (values.isEmpty() && !allowEmpty) itemResult else ParsedValue(values, returnPosition)
                 }
             }
         }
@@ -49,23 +51,10 @@ internal fun <T : R, R> leftAssociated(
     transform: (R, T) -> R
 ): OrdinaryParser<R> = SeparatedCombinator(item, separator, allowEmpty = false) map { it.reduce(transform) }
 
-internal fun <T, R> leftAssociated(
-    item: OrdinaryParser<T>,
-    separator: Parser<*>,
-    init: R,
-    transform: (R, T) -> R
-): OrdinaryParser<R> = SeparatedCombinator(item, separator, allowEmpty = true) map { it.fold(init, transform) }
-
 internal fun <T : R, R> leftAssociated(
     item: OrdinaryParser<T>,
     transform: (R, T) -> R
 ): OrdinaryParser<R> = leftAssociated(item, EmptyCombinator, transform)
-
-internal fun <T, R> leftAssociated(
-    item: OrdinaryParser<T>,
-    init: R,
-    transform: (R, T) -> R
-): OrdinaryParser<R> = leftAssociated(item, EmptyCombinator, init, transform)
 
 internal fun <T : R, R> rightAssociated(
     item: OrdinaryParser<T>,
@@ -73,20 +62,7 @@ internal fun <T : R, R> rightAssociated(
     transform: (T, R) -> R
 ): OrdinaryParser<R> = SeparatedCombinator(item, separator, allowEmpty = false) map { it.reduceRight(transform) }
 
-internal fun <T, R> rightAssociated(
-    item: OrdinaryParser<T>,
-    separator: Parser<*>,
-    init: R,
-    transform: (T, R) -> R
-): OrdinaryParser<R> = SeparatedCombinator(item, separator, allowEmpty = true) map { it.foldRight(init, transform) }
-
 internal fun <T : R, R> rightAssociated(
     item: OrdinaryParser<T>,
     transform: (T, R) -> R
 ): OrdinaryParser<R> = rightAssociated(item, EmptyCombinator, transform)
-
-internal fun <T, R> rightAssociated(
-    item: OrdinaryParser<T>,
-    init: R,
-    transform: (T, R) -> R
-): OrdinaryParser<R> = rightAssociated(item, EmptyCombinator, init, transform)
