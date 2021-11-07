@@ -47,11 +47,8 @@ internal class TokenizerTest {
                 "name = 15, age = 20, skill =100500, howDidYouDoThat=2",
                 listOf(word, number, word, number, word, number, word, number)
             ),
-            Arguments.of(
-                listOf(number, equals),
-                "15=13=11=9=7=5=3=1",
-                List(8) { number }
-            )
+            Arguments.of(listOf(number, equals), "15=13=11=9=7=5=3=1", List(8) { number }),
+            Arguments.of(listOf(name, word), "nameOther", listOf(word))
         )
     }
 }

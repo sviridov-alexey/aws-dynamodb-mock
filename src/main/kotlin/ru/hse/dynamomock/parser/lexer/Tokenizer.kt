@@ -30,22 +30,23 @@ internal class DefaultTokenizer(private val tokensAlphabet: List<Token>) : Token
         if (state.offset >= input.length) {
             return null
         }
-        for (token in tokensAlphabet) {
-            val (offset, row, column) = state
-            val matchedLength = token.match(input, offset)
-            if (matchedLength == 0) {
-                continue
-            }
 
+        val matched = tokensAlphabet.mapNotNull { token ->
+            val matchedLength = token.match(input, state.offset)
+            if (matchedLength > 0) matchedLength to token else null
+        }
+        return matched.maxByOrNull { it.first }?.let { (matchedLength, token) ->
+            val (offset, row, column) = state
             for (it in offset until offset + matchedLength) {
                 state.process(input[it])
             }
 
             val result = ParsedToken(token, state.tokenIndex, input, offset, matchedLength, row, column)
-            state.tokenIndex += if (token.ignore) 0 else 1
-            return result
+            if (!token.ignore) {
+                state.tokenIndex++
+            }
+            result
         }
-        return null
     }
 
     private data class State(var offset: Int = 0, var row: Int = 1, var column: Int = 1, var tokenIndex: Int = 0) {
