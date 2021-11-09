@@ -44,8 +44,8 @@ internal object BooleanExpressionGrammar : Grammar<BooleanExpression>() {
         (trueT map { True }) or
         (falseT map { False })
 
-    private val ands by leftAssociated(term, andT) { l, r -> And(l, r) }
-    override val parser by leftAssociated(ands, orT) { l, r -> Or(l, r) }
+    private val ands by leftAssociated(term, andT) { l, r, _ -> And(l, r) }
+    override val parser by leftAssociated(ands, orT) { l, r, _ -> Or(l, r) }
 }
 
 internal class BooleanExpressionGrammarTest : GrammarTest<BooleanExpression>() {
