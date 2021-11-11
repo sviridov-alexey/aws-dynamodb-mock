@@ -2,6 +2,9 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 val logbackVersion: String by project
 val awsSDKVersion: String by project
+val h2dbVersion: String by project
+val exposedVersion: String by project
+val gsonVersion: String by project
 val kotlinxSerializationVersion: String by project
 
 plugins {
@@ -20,12 +23,18 @@ repositories {
 dependencies {
     implementation("software.amazon.awssdk:dynamodb:$awsSDKVersion")
     implementation("ch.qos.logback:logback-classic:$logbackVersion")
+    implementation("com.h2database:h2:$h2dbVersion")
+    implementation("org.jetbrains.exposed:exposed-core:$exposedVersion")
+    implementation("org.jetbrains.exposed:exposed-dao:$exposedVersion")
+    implementation("org.jetbrains.exposed:exposed-jdbc:$exposedVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$kotlinxSerializationVersion")
+
+    testImplementation("org.junit.jupiter:junit-jupiter:5.7.0")
     testImplementation("org.jetbrains.kotlin:kotlin-test-testng:1.5.21")
 }
 
 tasks.test {
-    useTestNG()
+    useJUnitPlatform()
 }
 
 tasks.withType<KotlinCompile>() {
