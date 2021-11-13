@@ -14,11 +14,11 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             s = value.s(),
             n = value.n(),
             b = value.b()?.let { Base64.getEncoder().encodeToString(value.b().asByteArray()) },
-            ss = if (value.hasSs()) value.ss() else null,
-            ns = if (value.hasNs()) value.ns() else null,
-            bs = if (value.hasBs()) value.bs().map {  Base64.getEncoder().encodeToString(it.asByteArray()) } else null,
-            m = if (value.hasM()) value.m().mapValues { toAttributeTypeInfo(it.value) } else null,
-            l = if (value.hasL()) value.l()?.map { toAttributeTypeInfo(it) } else null,
+            ss = value.ss().takeIf { value.hasSs() },
+            ns = value.ns().takeIf { value.hasNs() },
+            bs = value.bs().map {  Base64.getEncoder().encodeToString(it.asByteArray()) }.takeIf { value.hasBs() },
+            m = value.m().mapValues { toAttributeTypeInfo(it.value) }.takeIf { value.hasM() },
+            l = value.l()?.map { toAttributeTypeInfo(it) }.takeIf { value.hasL() },
             bool = value.bool(),
             nul = value.nul()
         )
