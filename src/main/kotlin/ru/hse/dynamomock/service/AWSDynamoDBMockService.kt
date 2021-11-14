@@ -89,7 +89,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         )
 
         if (attributes != null) {
-            storage.updateItem(DBUpdateItemRequest(tableName, partitionKey, sortKey, itemsList))
+            storage.updateItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
         } else {
             storage.putItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
         }
@@ -180,7 +180,17 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             }
         }
 
-        putItemRequests.forEach{ storage.putItem(it) }
+        putItemRequests.forEach{
+            val attributes = getAttributesFromReturnValues(
+                ReturnValue.ALL_OLD,
+                DBGetItemRequest(it.tableName, it.partitionKey, it.sortKey)
+            )
+            if (attributes == null) {
+                storage.putItem(it)
+            } else {
+                storage.updateItem(it)
+            }
+        }
         deleteItemRequests.forEach{ storage.deleteItem(it) }
 
         return BatchWriteItemResponse.builder()

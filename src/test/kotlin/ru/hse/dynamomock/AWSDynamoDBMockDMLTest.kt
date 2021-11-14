@@ -15,6 +15,7 @@ import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest
 import software.amazon.awssdk.services.dynamodb.model.DeleteRequest
 import software.amazon.awssdk.services.dynamodb.model.DynamoDbException
 import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement
+import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutRequest
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException
 
@@ -429,7 +430,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `batchWriteItem putRequests`() {
+    fun `batchWriteItem test`() {
         val requestItems =
             mapOf<String, List<WriteRequest>>(
                 "testTable" to listOf(
@@ -551,4 +552,57 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
         assertEquals(item3, response32.item())
     }
+
+    @Test
+    fun `BatchWriteItem replace test`() {
+        val oldItem = mapOf(
+            partitionKeyName to AttributeValue.builder().s("value1").build(),
+            sortKeyName to AttributeValue.builder().n("1").build(),
+            "column3" to AttributeValue.builder().s("i am string").build(),
+            "column10" to AttributeValue.builder().s("87654").build()
+        )
+
+        mock.putItem(putItemRequestBuilder(tableName, oldItem))
+
+        val keys = oldItem.entries.filter { i -> i.key == partitionKeyName || i.key == sortKeyName }
+            .associate { it.key to it.value }
+
+        val response1 = mock.getItem(
+            getItemRequestBuilder(
+                tableName,
+                oldItem.keys.toList(),
+                keys
+            )
+        )
+
+        assertEquals(oldItem, response1.item())
+
+        val requestItems =
+            mapOf<String, List<WriteRequest>>(
+                tableName to listOf(
+                    WriteRequest.builder()
+                        .putRequest(
+                            PutRequest.builder()
+                                .item(item1)
+                                .build()
+                        )
+                        .build()
+                )
+            )
+        val batchWriteItemRequest = BatchWriteItemRequest.builder()
+            .requestItems(requestItems)
+            .build()
+        mock.batchWriteItem(batchWriteItemRequest)
+
+        val response2 = mock.getItem(
+            getItemRequestBuilder(
+                tableName,
+                item1.keys.toList(),
+                keys
+            )
+        )
+
+        assertEquals(item1, response2.item())
+    }
+
 }

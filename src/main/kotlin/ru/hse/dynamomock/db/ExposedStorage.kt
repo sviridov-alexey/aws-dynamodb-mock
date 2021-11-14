@@ -76,7 +76,7 @@ class ExposedStorage : DataStorageLayer {
         }
     }
 
-    override fun updateItem(request: DBUpdateItemRequest) {
+    override fun updateItem(request: DBPutItemRequest) {
         val table = getTable(request.tableName)
         transaction(database) {
             val condition = createKeyCondition(table, request.partitionKey, request.sortKey)

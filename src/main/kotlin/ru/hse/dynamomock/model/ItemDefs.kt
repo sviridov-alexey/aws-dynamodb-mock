@@ -31,13 +31,6 @@ data class DBDeleteItemRequest(
     val sortKey: Key?,
 )
 
-data class DBUpdateItemRequest(
-    val tableName: String,
-    val partitionKey: Key,
-    val sortKey: Key?,
-    val fieldValues: List<AttributeInfo>
-)
-
 @Serializable
 data class AttributeInfo(
     val name: String,
