@@ -37,13 +37,14 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             .nul(info.nul)
             .build()
 
-    private fun toKey(keyName: String, attributeValue: AttributeValue): Key =
+
+    private fun toKey(keyName: String, attributeValue: AttributeValue): Pair<String, Key> =
         if (attributeValue.s() != null) {
-            StringKey(keyName, attributeValue.s())
+            "S" to StringKey(keyName, attributeValue.s())
         } else if (attributeValue.n() != null) {
-            NumKey(keyName, attributeValue.n().toBigDecimal())
+            "N" to NumKey(keyName, attributeValue.n().toBigDecimal())
         } else if (attributeValue.b() != null) {
-            StringKey(keyName, Base64.getEncoder().encodeToString(attributeValue.b().asByteArray()))
+            "B" to StringKey(keyName, Base64.getEncoder().encodeToString(attributeValue.b().asByteArray()))
         } else {
             throw DynamoDbException.builder().message("Member must satisfy enum value set: [B, N, S]").build()
         }
@@ -129,29 +130,90 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             .build()
     }
 
-    private fun getKeyFromMetadata(keyName: String, keys: Map<String, AttributeValue>): Key {
+    fun batchWriteItem(batchWriteItemRequest: BatchWriteItemRequest): BatchWriteItemResponse {
+        if (!batchWriteItemRequest.hasRequestItems()) {
+            throw DynamoDbException.builder()
+                .message("BatchWriteItem cannot have a null or no requests set")
+                .build()
+        }
+        val requestItems = batchWriteItemRequest.requestItems()
+        val putItemRequests = mutableListOf<DBPutItemRequest>()
+        val deleteItemRequests = mutableListOf<DBDeleteItemRequest>()
+
+        requestItems.keys.forEach{
+            tablesMetadata[it] ?: throw ResourceNotFoundException.builder()
+                .message("Cannot do operations on a non-existent table").build()
+        }
+
+        requestItems.entries.forEach{ tableRequests ->
+            val items = mutableListOf<Map<String, AttributeValue>>()
+            val tableName = tableRequests.key
+            tableRequests.value.forEach{
+                val putRequest = it.putRequest()
+                val deleteRequest = it.deleteRequest()
+                if (!(putRequest.hasItem() xor deleteRequest.hasKey())) {
+                    throw DynamoDbException.builder()
+                        .message("Supplied AttributeValue has more than one datatypes set, must contain exactly one of the supported datatypes")
+                        .build()
+                } else if (putRequest.hasItem()) {
+                    val (partitionKey, sortKey) = getRequestMetadata(tableName, putRequest.item())
+                    val keys = putRequest.item().filter { item ->
+                        item.key == partitionKey.attributeName ||  item.key == sortKey?.attributeName
+                    }
+                    items.add(keys)
+                    val itemsList = putRequest.item().map { (k, v) -> AttributeInfo(k, toAttributeTypeInfo(v)) }
+                    putItemRequests.add(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
+                } else {
+                    val (partitionKey, sortKey) = getRequestMetadata(tableName, deleteRequest.key())
+                    items.add(deleteRequest.key())
+                    deleteItemRequests.add(DBDeleteItemRequest(tableName, partitionKey, sortKey))
+                }
+            }
+            if (setOf(items).size < items.size) {
+                throw DynamoDbException.builder()
+                    .message("Provided list of item keys contains duplicates")
+                    .build()
+            }
+        }
+
+        putItemRequests.forEach{ storage.putItem(it) }
+        deleteItemRequests.forEach{ storage.deleteItem(it) }
+
+        return BatchWriteItemResponse.builder()
+            .build()
+    }
+
+    private fun getKeyFromMetadata(keyName: String, keys: Map<String, AttributeValue>, attributeDefinitions: List<AttributeDefinition>): Key {
         val keyAttributeValue =
             keys[keyName] ?: throw DynamoDbException
                 .builder()
                 .message("One of the required keys was not given a value")
                 .build()
-        return toKey(keyName, keyAttributeValue)
+        val (keyType, key) = toKey(keyName, keyAttributeValue)
+        val expectedKeyType = attributeDefinitions.first { it.attributeName() == keyName }
+        if (expectedKeyType.attributeTypeAsString().uppercase() != keyType) {
+            throw DynamoDbException.builder()
+                .message("Invalid attribute value type")
+                .build()
+        }
+        return key
     }
 
-    private fun getSortKeyFromMetadata(sortKeyName: String?, keys: Map<String, AttributeValue>): Key? {
+    private fun getSortKeyFromMetadata(sortKeyName: String?, keys: Map<String, AttributeValue>, attributeDefinitions: List<AttributeDefinition>): Key? {
         sortKeyName ?: return null
         val sortKeyAttributeValue = keys[sortKeyName]
         sortKeyAttributeValue ?: return null
 
-        return getKeyFromMetadata(sortKeyName, keys)
+        return getKeyFromMetadata(sortKeyName, keys, attributeDefinitions)
     }
 
     private fun getRequestMetadata(tableName: String, keys: Map<String, AttributeValue>): Pair<Key, Key?> {
         val tableMetadata = tablesMetadata[tableName] ?: throw ResourceNotFoundException.builder()
-            .message(" Cannot do operations on a non-existent table").build()
+            .message("Cannot do operations on a non-existent table").build()
 
         val partitionKeyName = tableMetadata.partitionKey
-        return getKeyFromMetadata(partitionKeyName, keys) to getSortKeyFromMetadata(tableMetadata.sortKey, keys)
+        return getKeyFromMetadata(partitionKeyName, keys, tableMetadata.attributeDefinitions) to
+            getSortKeyFromMetadata(tableMetadata.sortKey, keys, tableMetadata.attributeDefinitions)
     }
 
     private fun getAttributesFromReturnValues(returnValues: ReturnValue?, request: DBGetItemRequest): Map<String, AttributeValue>? =
