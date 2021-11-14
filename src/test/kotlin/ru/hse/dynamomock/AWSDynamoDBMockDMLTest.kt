@@ -10,12 +10,16 @@ import org.junit.jupiter.params.provider.MethodSource
 import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
+import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemRequest
 import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest
+import software.amazon.awssdk.services.dynamodb.model.DeleteRequest
 import software.amazon.awssdk.services.dynamodb.model.DynamoDbException
 import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement
+import software.amazon.awssdk.services.dynamodb.model.PutRequest
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException
 
 import software.amazon.awssdk.services.dynamodb.model.ReturnValue
+import software.amazon.awssdk.services.dynamodb.model.WriteRequest
 import kotlin.random.Random
 import kotlin.test.assertEquals
 
@@ -25,6 +29,26 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         const val partitionKeyName = "partitionKey"
         const val sortKeyName = "sortKey"
         const val tableName = "testTable"
+
+        val item1 = mapOf(
+            partitionKeyName to AttributeValue.builder().s("value1").build(),
+            sortKeyName to AttributeValue.builder().n("1").build(),
+            "column2" to AttributeValue.builder().n("123.367").build()
+        )
+
+        val item2 =  mapOf(
+            partitionKeyName to AttributeValue.builder().s("key2").build(),
+            sortKeyName to AttributeValue.builder().n("2").build(),
+            "column3" to AttributeValue.builder().s("i am string").build(),
+            "column4" to AttributeValue.builder().ss(listOf("we", "are", "strings")).build()
+        )
+
+        val item3 = mapOf(
+            partitionKeyName to AttributeValue.builder().s("ssssnake").build(),
+            sortKeyName to AttributeValue.builder().n("30").build(),
+            "column5" to AttributeValue.builder().s("not number 5").build(),
+            "column4" to AttributeValue.builder().ns(listOf("67", "2", "0.5")).build()
+        )
 
         @JvmStatic
         fun items(): List<Arguments> {
@@ -37,21 +61,9 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             )
 
             return listOf(
-                Arguments.of(
-                    mapOf(
-                        partitionKeyName to AttributeValue.builder().s("value1").build(),
-                        sortKeyName to AttributeValue.builder().n("1").build(),
-                        "column2" to AttributeValue.builder().n("123.367").build()
-                    )
-                ),
-                Arguments.of(
-                    mapOf(
-                        partitionKeyName to AttributeValue.builder().s("key2").build(),
-                        sortKeyName to AttributeValue.builder().n("2").build(),
-                        "column3" to AttributeValue.builder().s("i am string").build(),
-                        "column4" to AttributeValue.builder().ss(listOf("we", "are", "strings")).build()
-                    )
-                ),
+                Arguments.of(item1),
+                Arguments.of(item2),
+                Arguments.of(item3),
                 Arguments.of(
                     mapOf(
                         partitionKeyName to AttributeValue.builder().s("key2").build(),
@@ -214,7 +226,8 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @MethodSource("items")
     fun `test throws when wrong returnValues`(item: Map<String, AttributeValue>) {
         val request = putItemRequestBuilder(tableName, item, ReturnValue.UPDATED_NEW)
-        assertThrows<DynamoDbException> {  mock.putItem(request) }
+       val e = assertThrows<DynamoDbException> {  mock.putItem(request) }
+        assertEquals("Return values set to invalid value", e.message)
     }
 
     @Test
@@ -226,7 +239,34 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             "column4" to AttributeValue.builder().ss(listOf("we", "are", "strings")).build()
         )
         val request = putItemRequestBuilder(tableName, item)
-        assertThrows<DynamoDbException> {  mock.putItem(request) }
+        val e = assertThrows<DynamoDbException> {  mock.putItem(request) }
+        assertEquals("One of the required keys was not given a value", e.message)
+    }
+
+    @Test
+    fun `test wrong key type`() {
+        val item = mapOf(
+            partitionKeyName to AttributeValue.builder().n("1234").build(),
+            sortKeyName to AttributeValue.builder().n("2").build(),
+            "column3" to AttributeValue.builder().s("i am string").build(),
+            "column4" to AttributeValue.builder().ss(listOf("we", "are", "strings")).build()
+        )
+        val request = putItemRequestBuilder(tableName, item)
+        val e = assertThrows<DynamoDbException> {  mock.putItem(request) }
+        assertEquals("Invalid attribute value type", e.message)
+    }
+
+    @Test
+    fun `test key type not from b, n, s`() {
+        val item = mapOf(
+            partitionKeyName to AttributeValue.builder().ss(listOf("key2")).build(),
+            sortKeyName to AttributeValue.builder().n("2").build(),
+            "column3" to AttributeValue.builder().s("i am string").build(),
+            "column4" to AttributeValue.builder().ss(listOf("we", "are", "strings")).build()
+        )
+        val request = putItemRequestBuilder(tableName, item)
+        val e = assertThrows<DynamoDbException> {  mock.putItem(request) }
+        assertEquals("Member must satisfy enum value set: [B, N, S]", e.message)
     }
 
     @Test
@@ -238,7 +278,8 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             "column4" to AttributeValue.builder().ss(listOf("we", "are", "strings")).build()
         )
         val request = putItemRequestBuilder("wrongTableName", item)
-        assertThrows<ResourceNotFoundException> {  mock.putItem(request) }
+        val e = assertThrows<ResourceNotFoundException> {  mock.putItem(request) }
+        assertEquals("Cannot do operations on a non-existent table", e.message)
     }
 
     @Test
@@ -287,5 +328,227 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             newKeys
         ))
         assertTrue(response.item().isEmpty())
+    }
+
+    // batchWriteItem
+
+    @ParameterizedTest
+    @MethodSource("items")
+    fun `batchWriteItem wrong tableName`(item: Map<String, AttributeValue>) {
+        val requestItems =
+            mapOf<String, List<WriteRequest>>(
+                "testTable2" to listOf(
+                    WriteRequest.builder()
+                        .putRequest(
+                            PutRequest.builder()
+                                .item(item)
+                                .build()
+                        )
+                        .build()
+                ))
+        val batchWriteItemRequest = BatchWriteItemRequest.builder()
+            .requestItems(requestItems)
+            .build()
+        val e = assertThrows<DynamoDbException> { mock.batchWriteItem(batchWriteItemRequest) }
+        assertEquals("Cannot do operations on a non-existent table", e.message)
+    }
+
+    @Test
+    fun `batchWriteItem no requestItems`() {
+        val requestItems = mapOf<String, List<WriteRequest>>()
+        val batchWriteItemRequest1 = BatchWriteItemRequest.builder()
+            .requestItems(requestItems)
+            .build()
+        val batchWriteItemRequest2 = BatchWriteItemRequest.builder()
+            .build()
+        val e1 = assertThrows<DynamoDbException> { mock.batchWriteItem(batchWriteItemRequest1) }
+        assertEquals("BatchWriteItem cannot have a null or no requests set", e1.message)
+        val e2 = assertThrows<DynamoDbException> { mock.batchWriteItem(batchWriteItemRequest2) }
+        assertEquals("BatchWriteItem cannot have a null or no requests set", e2.message)
+    }
+
+    @ParameterizedTest
+    @MethodSource("items")
+    fun `batchWriteItem putRequest and deleteRequest in one`(item: Map<String, AttributeValue>) {
+        val keys = item.entries.filter { i -> i.key == partitionKeyName || i.key == sortKeyName }
+            .associate { it.key to it.value }
+        val requestItems =
+            mapOf<String, List<WriteRequest>>(
+                "testTable" to listOf(
+                    WriteRequest.builder()
+                        .putRequest(
+                            PutRequest.builder()
+                                .item(item)
+                                .build()
+                        )
+                        .deleteRequest(
+                            DeleteRequest.builder()
+                                .key(keys)
+                                .build()
+                        )
+                        .build()
+                ))
+        val batchWriteItemRequest = BatchWriteItemRequest.builder()
+            .requestItems(requestItems)
+            .build()
+        val e = assertThrows<DynamoDbException> { mock.batchWriteItem(batchWriteItemRequest) }
+        assertEquals(
+            "Supplied AttributeValue has more than one datatypes set, must contain exactly one of the supported datatypes",
+            e.message)
+    }
+
+    @ParameterizedTest
+    @MethodSource("items")
+    fun `batchWriteItem duplicate items`(item: Map<String, AttributeValue>) {
+        val requestItems =
+            mapOf<String, List<WriteRequest>>(
+                "testTable" to listOf(
+                    WriteRequest.builder()
+                        .putRequest(
+                            PutRequest.builder()
+                                .item(item)
+                                .build()
+                        )
+                        .build(),
+                    WriteRequest.builder()
+                        .putRequest(
+                            PutRequest.builder()
+                                .item(item)
+                                .build()
+                        )
+                        .build()
+                )
+            )
+        val batchWriteItemRequest = BatchWriteItemRequest.builder()
+            .requestItems(requestItems)
+            .build()
+        val e = assertThrows<DynamoDbException> { mock.batchWriteItem(batchWriteItemRequest) }
+        assertEquals(
+            "Provided list of item keys contains duplicates",
+            e.message)
+    }
+
+    @Test
+    fun `batchWriteItem putRequests`() {
+        val requestItems =
+            mapOf<String, List<WriteRequest>>(
+                "testTable" to listOf(
+                    WriteRequest.builder()
+                        .putRequest(
+                            PutRequest.builder()
+                                .item(item1)
+                                .build()
+                        )
+                        .build(),
+                    WriteRequest.builder()
+                        .putRequest(
+                            PutRequest.builder()
+                                .item(item2)
+                                .build()
+                        )
+                        .build()
+                )
+            )
+        val batchWriteItemRequest = BatchWriteItemRequest.builder()
+            .requestItems(requestItems)
+            .build()
+        mock.batchWriteItem(batchWriteItemRequest)
+
+        val keys1 = item1.entries.filter { i -> i.key == partitionKeyName || i.key == sortKeyName }
+            .associate { it.key to it.value }
+        val keys2 = item2.entries.filter { i -> i.key == partitionKeyName || i.key == sortKeyName }
+            .associate { it.key to it.value }
+        val keys3 = item3.entries.filter { i -> i.key == partitionKeyName || i.key == sortKeyName }
+            .associate { it.key to it.value }
+
+        val response1 = mock.getItem(
+            getItemRequestBuilder(
+                tableName,
+                item1.keys.toList(),
+                keys1
+            )
+        )
+
+        assertEquals(item1, response1.item())
+
+        val response2 = mock.getItem(
+            getItemRequestBuilder(
+                tableName,
+                item2.keys.toList(),
+                keys2
+            )
+        )
+
+        assertEquals(item2, response2.item())
+
+        val response3 = mock.getItem(
+            getItemRequestBuilder(
+                tableName,
+                item3.keys.toList(),
+                keys3
+            )
+        )
+
+        assertTrue(response3.item().isEmpty())
+
+        val requestItems2 =
+            mapOf<String, List<WriteRequest>>(
+                "testTable" to listOf(
+                    WriteRequest.builder()
+                        .deleteRequest(
+                            DeleteRequest.builder()
+                                .key(keys1)
+                                .build()
+                        )
+                        .build(),
+                    WriteRequest.builder()
+                        .deleteRequest(
+                            DeleteRequest.builder()
+                                .key(keys2)
+                                .build()
+                        )
+                        .build(),
+                    WriteRequest.builder()
+                        .putRequest(
+                            PutRequest.builder()
+                                .item(item3)
+                                .build()
+                        )
+                        .build()
+                )
+            )
+        val batchWriteItemRequest2 = BatchWriteItemRequest.builder()
+            .requestItems(requestItems2)
+            .build()
+        mock.batchWriteItem(batchWriteItemRequest2)
+
+        val response12 = mock.getItem(
+            getItemRequestBuilder(
+                tableName,
+                item1.keys.toList(),
+                keys1
+            )
+        )
+
+        assertTrue(response12.item().isEmpty())
+
+        val response22 = mock.getItem(
+            getItemRequestBuilder(
+                tableName,
+                item2.keys.toList(),
+                keys2
+            )
+        )
+        assertTrue(response22.item().isEmpty())
+
+        val response32 = mock.getItem(
+            getItemRequestBuilder(
+                tableName,
+                item3.keys.toList(),
+                keys3
+            )
+        )
+
+        assertEquals(item3, response32.item())
     }
 }

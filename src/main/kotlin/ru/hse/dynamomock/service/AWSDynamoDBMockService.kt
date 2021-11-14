@@ -131,7 +131,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     }
 
     fun batchWriteItem(batchWriteItemRequest: BatchWriteItemRequest): BatchWriteItemResponse {
-        if (!batchWriteItemRequest.hasRequestItems()) {
+        if (!batchWriteItemRequest.hasRequestItems() || batchWriteItemRequest.requestItems().isEmpty()) {
             throw DynamoDbException.builder()
                 .message("BatchWriteItem cannot have a null or no requests set")
                 .build()
@@ -151,11 +151,11 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             tableRequests.value.forEach{
                 val putRequest = it.putRequest()
                 val deleteRequest = it.deleteRequest()
-                if (!(putRequest.hasItem() xor deleteRequest.hasKey())) {
+                if (putRequest == null && deleteRequest == null) {
                     throw DynamoDbException.builder()
                         .message("Supplied AttributeValue has more than one datatypes set, must contain exactly one of the supported datatypes")
                         .build()
-                } else if (putRequest.hasItem()) {
+                } else if (putRequest != null && putRequest.hasItem() && (deleteRequest == null || !deleteRequest.hasKey())) {
                     val (partitionKey, sortKey) = getRequestMetadata(tableName, putRequest.item())
                     val keys = putRequest.item().filter { item ->
                         item.key == partitionKey.attributeName ||  item.key == sortKey?.attributeName
@@ -163,13 +163,17 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                     items.add(keys)
                     val itemsList = putRequest.item().map { (k, v) -> AttributeInfo(k, toAttributeTypeInfo(v)) }
                     putItemRequests.add(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
-                } else {
+                } else if (deleteRequest != null && deleteRequest.hasKey() && (putRequest == null || !putRequest.hasItem())) {
                     val (partitionKey, sortKey) = getRequestMetadata(tableName, deleteRequest.key())
                     items.add(deleteRequest.key())
                     deleteItemRequests.add(DBDeleteItemRequest(tableName, partitionKey, sortKey))
+                } else {
+                    throw DynamoDbException.builder()
+                        .message("Supplied AttributeValue has more than one datatypes set, must contain exactly one of the supported datatypes")
+                        .build()
                 }
             }
-            if (setOf(items).size < items.size) {
+            if (items.toSet().size < items.size) {
                 throw DynamoDbException.builder()
                     .message("Provided list of item keys contains duplicates")
                     .build()
