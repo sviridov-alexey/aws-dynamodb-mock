@@ -2,41 +2,11 @@ package ru.hse.dynamomock.service
 
 import ru.hse.dynamomock.db.DataStorageLayer
 import ru.hse.dynamomock.model.*
-import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.services.dynamodb.model.*
-import java.util.Base64
+import java.util.*
 
 class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     private val tablesMetadata = mutableMapOf<String, TableMetadata>()
-
-    private fun toAttributeTypeInfo(value: AttributeValue) : AttributeTypeInfo =
-        AttributeTypeInfo(
-            s = value.s(),
-            n = value.n(),
-            b = value.b()?.let { Base64.getEncoder().encodeToString(value.b().asByteArray()) },
-            ss = value.ss().takeIf { value.hasSs() },
-            ns = value.ns().takeIf { value.hasNs() },
-            bs = value.bs().map {  Base64.getEncoder().encodeToString(it.asByteArray()) }.takeIf { value.hasBs() },
-            m = value.m().mapValues { toAttributeTypeInfo(it.value) }.takeIf { value.hasM() },
-            l = value.l()?.map { toAttributeTypeInfo(it) }.takeIf { value.hasL() },
-            bool = value.bool(),
-            nul = value.nul()
-        )
-
-    private fun toAttributeValue(info: AttributeTypeInfo) : AttributeValue =
-        AttributeValue.builder()
-            .s(info.s)
-            .n(info.n)
-            .b(info.b?.let { SdkBytes.fromByteArray(Base64.getDecoder().decode(info.b)) })
-            .ss(info.ss)
-            .ns(info.ns)
-            .bs(info.bs?.map { SdkBytes.fromByteArray(Base64.getDecoder().decode(it)) })
-            .m(info.m?.mapValues { toAttributeValue(it.value) })
-            .l(info.l?.map { toAttributeValue(it) })
-            .bool(info.bool)
-            .nul(info.nul)
-            .build()
-
 
     private fun toKey(keyName: String, attributeValue: AttributeValue): Pair<String, Key> =
         if (attributeValue.s() != null) {
@@ -81,7 +51,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
         val (partitionKey, sortKey) = getRequestMetadata(tableName, request.item())
 
-        val itemsList = request.item().map { (k, v) -> AttributeInfo(k, toAttributeTypeInfo(v)) }
+        val itemsList = request.item().map { (k, v) -> AttributeInfo(k, v.toAttributeTypeInfo()) }
 
         val attributes = getAttributesFromReturnValues(
             request.returnValues(),
@@ -106,7 +76,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         val response = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))
 
         val item = response?.filter { request.attributesToGet().contains(it.name) }?.associate {
-            it.name to toAttributeValue(it.type)
+            it.name to it.type.toAttributeValue()
         }
 
         return GetItemResponse.builder()
@@ -174,7 +144,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                             .build()
                     }
                     items.add(keys)
-                    val itemsList = putRequest.item().map { (k, v) -> AttributeInfo(k, toAttributeTypeInfo(v)) }
+                    val itemsList = putRequest.item().map { (k, v) -> AttributeInfo(k, v.toAttributeTypeInfo()) }
                     putItemRequests.add(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
                 } else if (deleteRequest != null && deleteRequest.hasKey() && (putRequest == null || !putRequest.hasItem())) {
                     val (partitionKey, sortKey) = getRequestMetadata(tableName, deleteRequest.key())
@@ -254,7 +224,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         when (returnValues) {
             ReturnValue.ALL_OLD -> {
                 storage.getItem(request)?.associate {
-                    it.name to toAttributeValue(it.type)
+                    it.name to it.type.toAttributeValue()
                 }
             }
             ReturnValue.NONE, null -> null

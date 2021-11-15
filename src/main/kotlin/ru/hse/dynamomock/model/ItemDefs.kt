@@ -1,7 +1,11 @@
 package ru.hse.dynamomock.model
 
 import kotlinx.serialization.Serializable
+import software.amazon.awssdk.core.SdkBytes
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue
+import software.amazon.awssdk.services.dynamodb.model.DynamoDbException
 import java.math.BigDecimal
+import java.util.*
 
 @Suppress("unused")
 data class DynamoItem(
@@ -49,8 +53,54 @@ data class AttributeTypeInfo(
     val l: List<AttributeTypeInfo>?,
     val bool: Boolean?,
     val nul: Boolean?
+) {
+    @kotlinx.serialization.Transient
+    private val notNullProperties = listOfNotNull(
+        s?.let { "S" to it },
+        n?.let { "N" to it },
+        b?.let { "B" to it },
+        ss?.let { "SS" to it },
+        ns?.let { "NS" to it },
+        bs?.let { "BS" to it },
+        m?.let { "M" to it },
+        l?.let { "L" to it },
+        bool?.let { "BOOL" to it },
+        nul?.let { "NULL" to it }
+    )
 
-)
+    fun toAttributeValue(): AttributeValue = AttributeValue.builder()
+        .s(s)
+        .n(n)
+        .b(b?.let { SdkBytes.fromByteArray(Base64.getDecoder().decode(b)) })
+        .ss(ss)
+        .ns(ns)
+        .bs(bs?.map { SdkBytes.fromByteArray(Base64.getDecoder().decode(it)) })
+        .m(m?.mapValues { it.value.toAttributeValue() })
+        .l(l?.map { it.toAttributeValue() })
+        .bool(bool)
+        .nul(nul)
+        .build()
+
+    fun requireExactlyOneValue() {
+        if (notNullProperties.size != 1) {
+            throw DynamoDbException.builder().message(
+                "Supplied AttributeValue has more than one datatypes set, must contain exactly one of the supported datatypes"
+            ).build()
+        }
+    }
+
+    val typeAsString
+        get(): String {
+            requireExactlyOneValue()
+            return notNullProperties.single().first
+        }
+
+    val value
+        get(): Any {
+            requireExactlyOneValue()
+            return notNullProperties.single().second
+        }
+}
 
 sealed class Key(
     val attributeName: String
@@ -65,3 +115,16 @@ class NumKey(
     attributeName: String,
     val attributeValue: BigDecimal
 ) : Key(attributeName)
+
+fun AttributeValue.toAttributeTypeInfo(): AttributeTypeInfo = AttributeTypeInfo(
+    s = s(),
+    n = n(),
+    b = b()?.let { Base64.getEncoder().encodeToString(b().asByteArray()) },
+    ss = ss().takeIf { hasSs() },
+    ns = ns().takeIf { hasNs() },
+    bs = bs().map {  Base64.getEncoder().encodeToString(it.asByteArray()) }.takeIf { hasBs() },
+    m = m().mapValues { it.value.toAttributeTypeInfo() }.takeIf { hasM() },
+    l = l()?.map { it.toAttributeTypeInfo() }.takeIf { hasL() },
+    bool = bool(),
+    nul = nul()
+)
