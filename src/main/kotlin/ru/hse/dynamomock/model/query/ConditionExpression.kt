@@ -4,23 +4,33 @@ import ru.hse.dynamomock.model.AttributeTypeInfo
 import ru.hse.dynamomock.model.toAttributeTypeInfo
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 
-// TODO support size()
+// TODO support B and BS in some methods
 sealed class ConditionExpression {
-    // TODO consider maps and lists
+    // TODO maybe introduce interface for `retrieve`
     sealed interface Parameter {
-        class Name(val name: String) : Parameter
+        class Attribute(val attribute: QueryAttribute) : Parameter
         class Value(val value: AttributeValue) : Parameter
+        class AttributeSize(val attribute: QueryAttribute) : Parameter
+
+        fun retrieve(attributeValues: Map<String, AttributeValue>): AttributeValue? = when (this) {
+            is Attribute -> attribute.retrieve(attributeValues)
+            is Value -> value
+            is AttributeSize -> {
+                val attributeValue = attribute.retrieve(attributeValues)
+                when {
+                    attributeValue == null -> null
+                    attributeValue.s() != null -> attributeValue.s().length
+                    attributeValue.b() != null -> attributeValue.b().asByteArray().size // TODO ???
+                    attributeValue.hasSs() -> attributeValue.ss().size
+                    attributeValue.hasL() -> attributeValue.l().size
+                    attributeValue.hasM() -> attributeValue.m().size
+                    else -> null
+                }?.let { AttributeValue.builder().n(it.toString()).build() }
+            }
+        }
     }
 
     abstract fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean
-
-    protected fun getValue(
-        parameter: Parameter,
-        attributeValues: Map<String, AttributeValue>,
-    ) = when (parameter) {
-        is Parameter.Name -> attributeValues.getValue(parameter.name)
-        is Parameter.Value -> parameter.value
-    }
 
     class And(private val left: ConditionExpression, private val right: ConditionExpression) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>) =
@@ -43,8 +53,8 @@ sealed class ConditionExpression {
         abstract fun compare(left: AttributeTypeInfo, right: AttributeTypeInfo): Boolean
 
         override fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean {
-            val leftValue = getValue(leftParam, attributeValues)
-            val rightValue = getValue(rightParam, attributeValues)
+            val leftValue = leftParam.retrieve(attributeValues) ?: return false
+            val rightValue = rightParam.retrieve(attributeValues) ?: return false
             val leftTypeInfo = leftValue.toAttributeTypeInfo()
             val rightTypeInfo = rightValue.toAttributeTypeInfo()
             if (leftTypeInfo.typeAsString != rightTypeInfo.typeAsString) {
@@ -109,22 +119,23 @@ sealed class ConditionExpression {
             array.any { Eq(attr, it).evaluate(attributeValues) }
     }
 
-    class AttributeExists(private val attr: Parameter.Name) : ConditionExpression() {
-        override fun evaluate(attributeValues: Map<String, AttributeValue>) = attr.name in attributeValues
+    class AttributeExists(private val attr: Parameter.Attribute) : ConditionExpression() {
+        override fun evaluate(attributeValues: Map<String, AttributeValue>) =
+            attr.attribute.retrieve(attributeValues) != null
     }
 
-    class AttributeType(private val attr: Parameter.Name, private val type: Parameter.Value) : ConditionExpression() {
+    class AttributeType(private val attr: Parameter.Attribute, private val type: Parameter.Value) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean {
             val typeInfo = type.value.toAttributeTypeInfo()
             require(typeInfo.typeAsString == "S")
             // TODO check if there is an existent type in [type]
-            return getValue(attr, attributeValues).toAttributeTypeInfo().typeAsString == typeInfo.value
+            return attr.retrieve(attributeValues)?.toAttributeTypeInfo()?.typeAsString == typeInfo.value
         }
     }
 
-    class BeginsWith(private val attr: Parameter.Name, private val start: Parameter.Value) : ConditionExpression() {
+    class BeginsWith(private val attr: Parameter.Attribute, private val start: Parameter.Value) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean {
-            val attrTypeInfo = getValue(attr, attributeValues).toAttributeTypeInfo()
+            val attrTypeInfo = attr.retrieve(attributeValues)?.toAttributeTypeInfo() ?: return false
             val startTypeInfo = start.value.toAttributeTypeInfo()
             require(attrTypeInfo.typeAsString == "S" || attrTypeInfo.typeAsString == "B")
             require(startTypeInfo.typeAsString == "S")
@@ -133,9 +144,9 @@ sealed class ConditionExpression {
         }
     }
 
-    class Contains(private val attr: Parameter.Name, private val operand: Parameter.Value) : ConditionExpression() {
+    class Contains(private val attr: Parameter.Attribute, private val operand: Parameter.Value) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean {
-            val attrTypeInfo = getValue(attr, attributeValues).toAttributeTypeInfo()
+            val attrTypeInfo = attr.retrieve(attributeValues)?.toAttributeTypeInfo() ?: return false
             val operandTypeInfo = operand.value.toAttributeTypeInfo()
             return when (attrTypeInfo.typeAsString) {
                 "S" -> {
