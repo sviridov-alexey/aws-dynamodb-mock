@@ -21,14 +21,18 @@ internal class ProjectionExpressionGrammar(
     @Suppress("unused")
     private val ws by RegexToken("\\s+", ignore = true)
 
-    private val name by (refName { QueryAttribute.Value(expressionAttributeName(it.text.drop(1))) }) or
-            (regularName map { QueryAttribute.Value(it.text) })
+    private val name by (refName { QueryAttribute.Simple.Value(expressionAttributeName(it.text.drop(1))) }) or
+            (regularName map { QueryAttribute.Simple.Value(it.text) })
 
     private val attributePart by (name * separated(-lbrace * index * -rbrace, EmptyCombinator) map { (name, indices) ->
-        indices.fold(name) { attr: QueryAttribute, ind -> QueryAttribute.ListValue(attr, ind.text.toInt()) }
+        indices.fold(name) { attr: QueryAttribute.Simple, ind ->
+            QueryAttribute.Simple.ListValue(attr, ind.text.toInt())
+        }
     }) or name
 
-    private val attribute by rightAssociated(attributePart, dot) { l, _, r -> QueryAttribute.MapValue(l, r) }
+    private val attribute by rightAssociated(attributePart, dot) { l, _, r: QueryAttribute ->
+        QueryAttribute.MapValue(l, r)
+    }
 
     override val parser by separated(attribute, comma)
 

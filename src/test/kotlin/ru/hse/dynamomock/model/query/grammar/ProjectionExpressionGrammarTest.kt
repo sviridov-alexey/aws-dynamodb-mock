@@ -11,9 +11,9 @@ internal class ProjectionExpressionGrammarTest : GrammarTest<List<QueryAttribute
         )
     )
 
-    private fun v(name: String) = QueryAttribute.Value(name)
-    private fun mv(attribute: QueryAttribute, value: QueryAttribute) = QueryAttribute.MapValue(attribute, value)
-    private fun lv(attribute: QueryAttribute, index: Int) = QueryAttribute.ListValue(attribute, index)
+    private fun v(name: String) = QueryAttribute.Simple.Value(name)
+    private fun mv(attribute: QueryAttribute.Simple, value: QueryAttribute) = QueryAttribute.MapValue(attribute, value)
+    private fun lv(attribute: QueryAttribute.Simple, index: Int) = QueryAttribute.Simple.ListValue(attribute, index)
 
     override fun successSource() = listOf(
         "first.second[1]" resulted listOf(mv(v("first"), lv(v("second"), 1))),
