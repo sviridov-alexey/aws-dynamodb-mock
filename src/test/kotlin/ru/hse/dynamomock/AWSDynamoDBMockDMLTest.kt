@@ -15,7 +15,6 @@ import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest
 import software.amazon.awssdk.services.dynamodb.model.DeleteRequest
 import software.amazon.awssdk.services.dynamodb.model.DynamoDbException
 import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement
-import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutRequest
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException
 
@@ -430,6 +429,38 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     }
 
     @Test
+    fun `BatchWriteItem 25+ items in one request`() {
+        val itemsList = mutableListOf<WriteRequest>()
+        val str = "sTRonG"
+        for (i in 0..25) {
+            str.plus("1")
+            val item : Map<String, AttributeValue> = mapOf(
+                partitionKeyName to AttributeValue.builder().s(str).build(),
+                sortKeyName to AttributeValue.builder().n("123.3667").build(),
+                "column4" to AttributeValue.builder().s("column4").build()
+            )
+            itemsList.add(WriteRequest.builder()
+                .putRequest(
+                    PutRequest.builder()
+                        .item(item)
+                        .build()
+                )
+                .build())
+        }
+        val requestItems =
+            mapOf<String, List<WriteRequest>>(
+                tableName to itemsList)
+
+        val batchWriteItemRequest = BatchWriteItemRequest.builder()
+            .requestItems(requestItems)
+            .build()
+        val e = assertThrows<DynamoDbException> { mock.batchWriteItem(batchWriteItemRequest) }
+        assertEquals(
+            "Too many items requested for the BatchWriteItem call",
+            e.message)
+    }
+
+    @Test
     fun `batchWriteItem test`() {
         val requestItems =
             mapOf<String, List<WriteRequest>>(
@@ -604,5 +635,4 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
         assertEquals(item1, response2.item())
     }
-
 }

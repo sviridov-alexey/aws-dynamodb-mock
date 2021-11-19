@@ -173,11 +173,17 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                         .build()
                 }
             }
+            if (items.size > 25) {
+                throw DynamoDbException.builder()
+                    .message("Too many items requested for the BatchWriteItem call")
+                    .build()
+            }
             if (items.toSet().size < items.size) {
                 throw DynamoDbException.builder()
                     .message("Provided list of item keys contains duplicates")
                     .build()
             }
+
         }
 
         putItemRequests.forEach{
