@@ -81,8 +81,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         }
     }
 
-    @BeforeEach
-    fun createTable() {
+    private fun createAnyTable(name: String) {
         val attributeDefinitions = listOf<AttributeDefinition>(
             AttributeDefinition.builder()
                 .attributeName(partitionKeyName)
@@ -94,7 +93,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
                 .build()
         )
         val createTableRequest = CreateTableRequest.builder()
-            .tableName(tableName)
+            .tableName(name)
             .attributeDefinitions(attributeDefinitions)
             .keySchema(
                 listOf(
@@ -110,6 +109,11 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             )
             .build()
         mock.createTable(createTableRequest)
+    }
+
+    @BeforeEach
+    fun createTable() {
+        createAnyTable(tableName)
     }
 
     @ParameterizedTest
@@ -450,6 +454,58 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         val requestItems =
             mapOf<String, List<WriteRequest>>(
                 tableName to itemsList)
+
+        val batchWriteItemRequest = BatchWriteItemRequest.builder()
+            .requestItems(requestItems)
+            .build()
+        val e = assertThrows<DynamoDbException> { mock.batchWriteItem(batchWriteItemRequest) }
+        assertEquals(
+            "Too many items requested for the BatchWriteItem call",
+            e.message)
+    }
+
+    @Test
+    fun `BatchWriteItem 25+ items multiple tables in one request`() {
+        val itemsList = mutableListOf<WriteRequest>()
+        var str = "sTRonG"
+        for (i in 0..13) {
+            str += "1"
+            val item : Map<String, AttributeValue> = mapOf(
+                partitionKeyName to AttributeValue.builder().s(str).build(),
+                sortKeyName to AttributeValue.builder().n("123.3667").build(),
+                "column4" to AttributeValue.builder().s("column4").build()
+            )
+            itemsList.add(WriteRequest.builder()
+                .putRequest(
+                    PutRequest.builder()
+                        .item(item)
+                        .build()
+                )
+                .build())
+        }
+
+        createAnyTable("testTable2")
+        val itemsList2 = mutableListOf<WriteRequest>()
+        var str2 = "whatever is takes"
+        for (i in 0..12) {
+            str2 += "1"
+            val item : Map<String, AttributeValue> = mapOf(
+                partitionKeyName to AttributeValue.builder().s(str2).build(),
+                sortKeyName to AttributeValue.builder().n("123.3667").build(),
+            )
+            itemsList2.add(WriteRequest.builder()
+                .putRequest(
+                    PutRequest.builder()
+                        .item(item)
+                        .build()
+                )
+                .build())
+        }
+
+        val requestItems =
+            mapOf<String, List<WriteRequest>>(
+                tableName to itemsList,
+                "testTable2" to itemsList2)
 
         val batchWriteItemRequest = BatchWriteItemRequest.builder()
             .requestItems(requestItems)

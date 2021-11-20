@@ -145,6 +145,17 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                 .message("Cannot do operations on a non-existent table").build()
         }
 
+        var batchSize = 0
+        requestItems.entries.forEach {
+            batchSize += it.value.size
+        }
+
+        if (batchSize > 25) {
+            throw DynamoDbException.builder()
+                .message("Too many items requested for the BatchWriteItem call")
+                .build()
+        }
+
         requestItems.entries.forEach{ tableRequests ->
             val items = mutableListOf<Map<String, AttributeValue>>()
             val tableName = tableRequests.key
@@ -173,11 +184,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                         .build()
                 }
             }
-            if (items.size > 25) {
-                throw DynamoDbException.builder()
-                    .message("Too many items requested for the BatchWriteItem call")
-                    .build()
-            }
+
             if (items.toSet().size < items.size) {
                 throw DynamoDbException.builder()
                     .message("Provided list of item keys contains duplicates")
