@@ -53,6 +53,10 @@ class AWSDynamoDBMock : DynamoDbClient {
         return service.batchWriteItem(batchWriteItemRequest)
     }
 
+    fun scanItemsFromCSV(fileName: String, tableName: String) {
+        service.scanItems(fileName, tableName)
+    }
+
     companion object {
         private const val SERVICE_NAME = "dynamodb"
     }

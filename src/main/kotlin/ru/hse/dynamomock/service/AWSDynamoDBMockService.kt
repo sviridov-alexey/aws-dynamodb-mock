@@ -4,6 +4,8 @@ import ru.hse.dynamomock.db.DataStorageLayer
 import ru.hse.dynamomock.model.*
 import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.services.dynamodb.model.*
+import java.io.File
+import java.io.IOException
 import java.util.Base64
 
 class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
@@ -210,6 +212,63 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             .build()
     }
 
+    fun scanItems(fileName: String, tableName: String) {
+        val columnsInfo = mutableListOf<Pair<String, String>>()
+        File(fileName).useLines { line ->
+            val firstRow = line.firstOrNull() ?: throw IOException("The file is empty")
+            val info = firstRow.split(",")
+            info.forEach {
+                val value = it.split("|")
+                if (value.size != 2) {
+                    throw IOException("Wrong value format. Use <column_name>|<type>")
+                }
+                val columnName = value[0]
+                val type = value[1]
+                if (type != "S" && type != "N" && type != "SS" && type != "NS") {
+                    throw IOException("ScanItems supports only S, N, NS or SS types right now")
+                }
+                columnsInfo.add(columnName to type)
+            }
+
+        }
+        var i = 0
+        val itemsList = mutableListOf<Map<String, AttributeValue>>()
+        File(fileName).forEachLine {
+            if (i != 0) {
+                val columnValues = it.split(",")
+                if (columnValues.size != columnsInfo.size) {
+                    throw IOException("${i+1} row's size doesn't match the size of first row")
+                }
+                val item = columnValues.mapIndexed { index, element ->
+                    val (columnName, type) = columnsInfo[index]
+                    columnName to when(type) {
+                        "S" -> AttributeValue.builder().s(element).build()
+                        "N" -> AttributeValue.builder().n(element).build()
+                        "NS" -> {
+                            val list = element.split(";")
+                            AttributeValue.builder().ns(list).build()
+                        }
+                        "SS" -> {
+                            val list = element.split(";")
+                            AttributeValue.builder().ss(list).build()
+                        }
+                        else -> throw IOException("ScanItems supports only S, N, NS or SS types right now")
+                    }
+                }.toMap()
+
+                itemsList.add(item)
+            }
+            i++
+        }
+        itemsList.forEach {
+            putItem(
+                PutItemRequest.builder()
+                    .item(it)
+                    .tableName(tableName)
+                    .build()
+            )
+        }
+    }
     private fun getKeyFromMetadata(keyName: String, keys: Map<String, AttributeValue>, attributeDefinitions: List<AttributeDefinition>): Key {
         val keyAttributeValue =
             keys[keyName] ?: throw DynamoDbException
