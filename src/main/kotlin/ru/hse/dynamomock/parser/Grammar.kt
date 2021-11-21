@@ -5,7 +5,7 @@ import ru.hse.dynamomock.parser.lexer.Token
 import kotlin.reflect.KProperty
 
 internal abstract class Grammar<T> {
-    protected abstract val parser: OrdinaryParser<T>
+    abstract val parser: OrdinaryParser<T>
 
     private val tokensAlphabet = mutableListOf<Token>()
 
@@ -25,4 +25,8 @@ internal abstract class Grammar<T> {
     protected operator fun <T : Token> T.getValue(thisRef: Grammar<*>, property: KProperty<*>): T = this
 
     protected operator fun <T : OrdinaryParser<*>> T.getValue(thisRef: Grammar<*>, property: KProperty<*>): T = this
+    
+    protected fun externalGrammar(other: Grammar<*>) {
+        tokensAlphabet += other.tokensAlphabet
+    }
 }
