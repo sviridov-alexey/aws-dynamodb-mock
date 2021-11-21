@@ -10,9 +10,7 @@ internal class ProjectionExpressionGrammar(
 ) : Grammar<List<QueryAttribute>>() {
     private val comma by LiteralToken(",")
 
-    private val attributeGrammar = QueryAttributeGrammar(expressionAttributeNames).also {
-        externalGrammar(it)
-    }
+    private val attributeGrammar by QueryAttributeGrammar(expressionAttributeNames)
 
     override val parser by separated(attributeGrammar.parser, comma)
 }

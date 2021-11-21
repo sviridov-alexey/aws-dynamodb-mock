@@ -25,8 +25,10 @@ internal abstract class Grammar<T> {
     protected operator fun <T : Token> T.getValue(thisRef: Grammar<*>, property: KProperty<*>): T = this
 
     protected operator fun <T : OrdinaryParser<*>> T.getValue(thisRef: Grammar<*>, property: KProperty<*>): T = this
-    
-    protected fun externalGrammar(other: Grammar<*>) {
-        tokensAlphabet += other.tokensAlphabet
+
+    protected operator fun <T : Grammar<*>> T.provideDelegate(thisRef: Grammar<*>, property: KProperty<*>): T = apply {
+        this@Grammar.tokensAlphabet += this@provideDelegate.tokensAlphabet
     }
+
+    protected operator fun <T : Grammar<*>> T.getValue(thisRef: Grammar<*>, property: KProperty<*>): T = this
 }
