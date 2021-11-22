@@ -25,7 +25,7 @@ internal abstract class GrammarTest<T> {
     @ParameterizedTest
     @MethodSource("failSource")
     fun testFailed(expression: String) {
-        assertThrows<IllegalArgumentException> {
+        assertThrows<Exception> {
             grammar.parse(expression)
         }
     }

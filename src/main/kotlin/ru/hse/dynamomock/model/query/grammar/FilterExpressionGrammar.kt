@@ -43,7 +43,7 @@ internal class FilterExpressionGrammar(
     private val valueT by RegexToken(":[a-zA-Z0-9]+")
 
     @Suppress("unused")
-    private val ws by RegexToken("\\s+")
+    private val ws by RegexToken("\\s+", ignore = true)
 
     private val attributeGrammar by QueryAttributeGrammar(expressionAttributeNames)
     private val attribute by attributeGrammar.parser map { Parameter.Attribute(it) }
@@ -82,7 +82,7 @@ internal class FilterExpressionGrammar(
     private val attributeTypeF by function2(attributeTypeKw, attribute, value) map { (attr, type) ->
         ConditionExpression.AttributeType(attr, type)
     }
-    private val beginsWithF by function2(beginsWithKw, attribute, value) map { (attr, substring) ->
+    private val beginsWithF by function2(beginsWithKw, attribute, attribute or value) map { (attr, substring) ->
         ConditionExpression.BeginsWith(attr, substring)
     }
     private val containsF by function2(containsKw, attribute, attribute or value or size) map { (attr, op) ->
@@ -98,9 +98,10 @@ internal class FilterExpressionGrammar(
     private val function by betweenF or inF or attributeExistsF or attributeNotExistsF or
             attributeTypeF or beginsWithF or containsF
 
-    private val primary by mayParens(condition or function)
-    private val primaryOrNot by primary or (-notKw * primary map { ConditionExpression.Not(it) })
-    private val primaryWithAnds by leftAssociated(primaryOrNot, andKw) { l, r, _ -> ConditionExpression.And(l, r) }
+    private val primary: OrdinaryParser<ConditionExpression> by condition or function or
+            (-lp * ref(this::parser) * -rp) or (-notKw * ref(this::primary) map { ConditionExpression.Not(it) })
 
-    override val parser by leftAssociated(primaryWithAnds, orKw) { l, r, _ -> ConditionExpression.Or(l, r) }
+    private val ands by leftAssociated(primary, andKw) { l, r, _ -> ConditionExpression.And(l, r) }
+
+    override val parser by leftAssociated(ands, orKw) { l, r, _ -> ConditionExpression.Or(l, r) }
 }
