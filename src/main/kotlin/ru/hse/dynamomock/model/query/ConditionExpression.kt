@@ -8,9 +8,9 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 sealed class ConditionExpression {
     // TODO maybe introduce interface for `retrieve`
     sealed interface Parameter {
-        class Attribute(val attribute: QueryAttribute) : Parameter
-        class Value(val value: AttributeValue) : Parameter
-        class AttributeSize(val attribute: QueryAttribute) : Parameter
+        data class Attribute(val attribute: QueryAttribute) : Parameter
+        data class Value(val value: AttributeValue) : Parameter
+        data class AttributeSize(val attribute: QueryAttribute) : Parameter
 
         fun retrieve(attributeValues: Map<String, AttributeValue>): AttributeValue? = when (this) {
             is Attribute -> attribute.retrieve(attributeValues)
@@ -32,25 +32,31 @@ sealed class ConditionExpression {
 
     abstract fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean
 
-    class And(private val left: ConditionExpression, private val right: ConditionExpression) : ConditionExpression() {
+    data class And(
+        private val left: ConditionExpression,
+        private val right: ConditionExpression
+    ) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>) =
             left.evaluate(attributeValues) && right.evaluate(attributeValues)
     }
 
-    class Or(private val left: ConditionExpression, private val right: ConditionExpression) : ConditionExpression() {
+    data class Or(
+        private val left: ConditionExpression,
+        private val right: ConditionExpression
+    ) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>) =
             left.evaluate(attributeValues) || right.evaluate(attributeValues)
     }
 
-    class Not(private val expression: ConditionExpression) : ConditionExpression() {
+    data class Not(private val expression: ConditionExpression) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>) = !expression.evaluate(attributeValues)
     }
 
-    abstract class Condition(
-        private val leftParam: Parameter,
-        private val rightParam: Parameter
-    ) : ConditionExpression() {
-        abstract fun compare(left: AttributeTypeInfo, right: AttributeTypeInfo): Boolean
+    abstract class Condition : ConditionExpression() {
+        protected abstract val leftParam: Parameter
+        protected abstract val rightParam: Parameter
+
+        protected abstract fun compare(left: AttributeTypeInfo, right: AttributeTypeInfo): Boolean
 
         override fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean {
             val leftValue = leftParam.retrieve(attributeValues) ?: return false
@@ -64,18 +70,21 @@ sealed class ConditionExpression {
         }
     }
 
-    class Eq(leftParam: Parameter, rightParam: Parameter) : Condition(leftParam, rightParam) {
+    data class Eq(
+        override val leftParam: Parameter,
+        override val rightParam: Parameter
+    ) : Condition() {
         override fun compare(left: AttributeTypeInfo, right: AttributeTypeInfo) = left.value == right.value
     }
 
-    class Neq(leftParam: Parameter, rightParam: Parameter) : Condition(leftParam, rightParam) {
+    data class Neq(
+        override val leftParam: Parameter,
+        override val rightParam: Parameter
+    ) : Condition() {
         override fun compare(left: AttributeTypeInfo, right: AttributeTypeInfo) = left.value != right.value
     }
 
-    abstract class ConditionWithComparable(
-        leftParam: Parameter,
-        rightParam: Parameter
-    ) : Condition(leftParam, rightParam) {
+    abstract class ConditionWithComparable : Condition() {
         abstract fun <T : Comparable<T>> compare(left: T, right: T): Boolean
 
         final override fun compare(left: AttributeTypeInfo, right: AttributeTypeInfo) = when (left.typeAsString) {
@@ -86,23 +95,35 @@ sealed class ConditionExpression {
         }
     }
 
-    class Le(leftParam: Parameter, rightParam: Parameter) : ConditionWithComparable(leftParam, rightParam) {
+    data class Le(
+        override val leftParam: Parameter,
+        override val rightParam: Parameter
+    ) : ConditionWithComparable() {
         override fun <T : Comparable<T>> compare(left: T, right: T) = left <= right
     }
 
-    class Lt(leftParam: Parameter, rightParam: Parameter) : ConditionWithComparable(leftParam, rightParam) {
+    data class Lt(
+        override val leftParam: Parameter,
+        override val rightParam: Parameter
+    ) : ConditionWithComparable() {
         override fun <T : Comparable<T>> compare(left: T, right: T) = left < right
     }
 
-    class Ge(leftParam: Parameter, rightParam: Parameter) : ConditionWithComparable(leftParam, rightParam) {
+    data class Ge(
+        override val leftParam: Parameter,
+        override val rightParam: Parameter
+    )  : ConditionWithComparable() {
         override fun <T : Comparable<T>> compare(left: T, right: T) = left >= right
     }
 
-    class Gt(leftParam: Parameter, rightParam: Parameter) : ConditionWithComparable(leftParam, rightParam) {
+    data class Gt(
+        override val leftParam: Parameter,
+        override val rightParam: Parameter
+    )  : ConditionWithComparable() {
         override fun <T : Comparable<T>> compare(left: T, right: T) = left > right
     }
 
-    class Between(
+    data class Between(
         private val param: Parameter,
         private val leftParam: Parameter,
         private val rightParam: Parameter
@@ -111,7 +132,7 @@ sealed class ConditionExpression {
             And(Le(leftParam, param), Le(param, rightParam)).evaluate(attributeValues)
     }
 
-    class In(
+    data class In(
         private val attr: Parameter,
         private val list: List<Parameter>
     ) : ConditionExpression() {
@@ -119,12 +140,15 @@ sealed class ConditionExpression {
             list.any { Eq(attr, it).evaluate(attributeValues) }
     }
 
-    class AttributeExists(private val attr: Parameter.Attribute) : ConditionExpression() {
+    data class AttributeExists(private val attr: Parameter.Attribute) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>) =
             attr.attribute.retrieve(attributeValues) != null
     }
 
-    class AttributeType(private val attr: Parameter.Attribute, private val type: Parameter.Value) : ConditionExpression() {
+    data class AttributeType(
+        private val attr: Parameter.Attribute,
+        private val type: Parameter.Value
+    ) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean {
             val typeInfo = type.value.toAttributeTypeInfo()
             require(typeInfo.typeAsString == "S")
@@ -133,10 +157,13 @@ sealed class ConditionExpression {
         }
     }
 
-    class BeginsWith(private val attr: Parameter.Attribute, private val start: Parameter.Value) : ConditionExpression() {
+    data class BeginsWith(
+        private val attr: Parameter.Attribute,
+        private val start: Parameter
+    ) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean {
             val attrTypeInfo = attr.retrieve(attributeValues)?.toAttributeTypeInfo() ?: return false
-            val startTypeInfo = start.value.toAttributeTypeInfo()
+            val startTypeInfo = start.retrieve(attributeValues)?.toAttributeTypeInfo() ?: return false
             require(attrTypeInfo.typeAsString == "S" || attrTypeInfo.typeAsString == "B")
             require(startTypeInfo.typeAsString == "S")
             // TODO support B in [attr]
@@ -144,7 +171,10 @@ sealed class ConditionExpression {
         }
     }
 
-    class Contains(private val attr: Parameter.Attribute, private val operand: Parameter) : ConditionExpression() {
+    data class Contains(
+        private val attr: Parameter.Attribute,
+        private val operand: Parameter
+    ) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean {
             val attrTypeInfo = attr.retrieve(attributeValues)?.toAttributeTypeInfo() ?: return false
             val operandTypeInfo = operand.retrieve(attributeValues)?.toAttributeTypeInfo() ?: return false
