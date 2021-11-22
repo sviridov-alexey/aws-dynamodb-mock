@@ -5,10 +5,7 @@ import ru.hse.dynamomock.parser.grammars.GrammarTest
 
 internal class ProjectionExpressionGrammarTest : GrammarTest<List<QueryAttribute>>() {
     override val grammar = ProjectionExpressionGrammar(
-        mapOf(
-            "kek" to "another_kek",
-            "what" to "WhAt.that---"
-        )
+        mapOf("#kek" to "another_kek", "#what" to "WhAt.that---")
     )
 
     private fun v(name: String) = QueryAttribute.Simple.Value(name)

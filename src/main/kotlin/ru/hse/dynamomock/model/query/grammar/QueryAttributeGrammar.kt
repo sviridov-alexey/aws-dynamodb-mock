@@ -19,7 +19,7 @@ internal class QueryAttributeGrammar(
     @Suppress("unused")
     private val ws by RegexToken("\\s+", ignore = true)
 
-    private val name by (refName { QueryAttribute.Simple.Value(expressionAttributeName(it.text.drop(1))) }) or
+    private val name by (refName { QueryAttribute.Simple.Value(expressionAttributeName(it.text)) }) or
             (regularName map { QueryAttribute.Simple.Value(it.text) })
 
     private val attributePart by (name * separated(-lbrace * index * -rbrace, EmptyCombinator) map { (name, indices) ->

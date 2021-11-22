@@ -6,8 +6,8 @@ import ru.hse.dynamomock.parser.grammars.GrammarTest
 internal class QueryAttributeGrammarTest : GrammarTest<QueryAttribute>() {
     override val grammar = QueryAttributeGrammar(
         mapOf(
-            "one" to "1one", "aNo22ThEr" to "kek.Another.Kek",
-            "1test" to "_.another-Test11...", "WHaT" to "w.H.A.T"
+            "#one" to "1one", "#aNo22ThEr" to "kek.Another.Kek",
+            "#1test" to "_.another-Test11...", "#WHaT" to "w.H.A.T"
         )
     )
 
