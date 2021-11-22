@@ -18,10 +18,11 @@ internal abstract class Token(var name: String?, val ignore: Boolean) : Ordinary
 internal class LiteralToken(
     private val text: CharSequence,
     name: String? = null,
-    ignore: Boolean = false
+    ignore: Boolean = false,
+    private val ignoreCase: Boolean = false,
 ) : Token(name, ignore) {
     override fun match(input: CharSequence, fromIndex: Int): Int =
-        if (input.startsWith(text, fromIndex)) text.length else 0
+        if (input.startsWith(text, fromIndex, ignoreCase)) text.length else 0
 }
 
 internal class RegexToken(
