@@ -113,10 +113,10 @@ sealed class ConditionExpression {
 
     class In(
         private val attr: Parameter,
-        private val array: List<Parameter>
+        private val list: List<Parameter>
     ) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>) =
-            array.any { Eq(attr, it).evaluate(attributeValues) }
+            list.any { Eq(attr, it).evaluate(attributeValues) }
     }
 
     class AttributeExists(private val attr: Parameter.Attribute) : ConditionExpression() {
@@ -144,10 +144,10 @@ sealed class ConditionExpression {
         }
     }
 
-    class Contains(private val attr: Parameter.Attribute, private val operand: Parameter.Value) : ConditionExpression() {
+    class Contains(private val attr: Parameter.Attribute, private val operand: Parameter) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean {
             val attrTypeInfo = attr.retrieve(attributeValues)?.toAttributeTypeInfo() ?: return false
-            val operandTypeInfo = operand.value.toAttributeTypeInfo()
+            val operandTypeInfo = operand.retrieve(attributeValues)?.toAttributeTypeInfo() ?: return false
             return when (attrTypeInfo.typeAsString) {
                 "S" -> {
                     require(operandTypeInfo.typeAsString == "S")
