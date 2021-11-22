@@ -11,10 +11,6 @@ internal class QueryAttributeGrammarTest : GrammarTest<QueryAttribute>() {
         )
     )
 
-    private fun v(name: String) = QueryAttribute.Simple.Value(name)
-    private fun mv(attribute: QueryAttribute.Simple, value: QueryAttribute) = QueryAttribute.MapValue(attribute, value)
-    private fun lv(attribute: QueryAttribute.Simple, index: Int) = QueryAttribute.Simple.ListValue(attribute, index)
-
     override fun successSource() = listOf(
         "first.second[1]" resulted mv(v("first"), lv(v("second"), 1)),
         "f1RsT--2_" resulted v("f1RsT--2_"),

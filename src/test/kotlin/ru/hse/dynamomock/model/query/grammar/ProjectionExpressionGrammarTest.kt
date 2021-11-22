@@ -8,10 +8,6 @@ internal class ProjectionExpressionGrammarTest : GrammarTest<List<QueryAttribute
         mapOf("#kek" to "another_kek", "#what" to "WhAt.that---")
     )
 
-    private fun v(name: String) = QueryAttribute.Simple.Value(name)
-    private fun mv(attribute: QueryAttribute.Simple, value: QueryAttribute) = QueryAttribute.MapValue(attribute, value)
-    private fun lv(attribute: QueryAttribute.Simple, index: Int) = QueryAttribute.Simple.ListValue(attribute, index)
-
     override fun successSource() = listOf(
         "one.two.three, \n\n\t one \t\t,\t another[0].kek[1][4]" resulted listOf(
             mv(v("one"), mv(v("two"), v("three"))), v("one"), mv(lv(v("another"), 0), lv(lv(v("kek"), 1), 4))
