@@ -2,6 +2,7 @@ package ru.hse.dynamomock.model.query
 
 import ru.hse.dynamomock.model.AttributeTypeInfo
 import ru.hse.dynamomock.model.query.grammar.ConditionExpressionGrammar
+import ru.hse.dynamomock.model.query.ConditionExpression.Parameter
 import ru.hse.dynamomock.model.toAttributeTypeInfo
 import software.amazon.awssdk.services.dynamodb.model.*
 
@@ -193,7 +194,7 @@ sealed class ConditionExpression {
 
 fun QueryRequest.retrieveFilterExpression(): ConditionExpression {
     return if (hasQueryFilter()) {
-        retrieveFilterExpressionFromQueryFilter()
+        retrieveConditionExpression(queryFilter(), conditionalOperator())
     } else {
         val filterExpression = filterExpression() ?: throw DynamoDbException.builder()
             .message("Nor filter expression, not query filter was provided.")
@@ -202,13 +203,49 @@ fun QueryRequest.retrieveFilterExpression(): ConditionExpression {
     }
 }
 
-private fun QueryRequest.retrieveFilterExpressionFromQueryFilter(): ConditionExpression {
-    check(hasQueryFilter())
-    val conditions = queryFilter().entries.map { (name, condition) ->
-        condition.toConditionExpression(ConditionExpression.Parameter.Attribute(QueryAttribute.Simple.Value(name)))
+fun QueryRequest.retrieveKeyConditionExpression(): ConditionExpression {
+    return if (hasKeyConditions()) {
+        retrieveConditionExpression(keyConditions(), ConditionalOperator.AND)
+    } else {
+        val keyConditionExpression = keyConditionExpression() ?: throw DynamoDbException.builder()
+            .message("Nor key condition expression, nor key conditions were provided.")
+            .build()
+        ConditionExpressionGrammar(
+            expressionAttributeNames(), expressionAttributeValues()
+        ).parse(keyConditionExpression).also {
+            if (!isValidKeyConditionExpression(it)) {
+                throw DynamoDbException.builder().message("Key condition expression is invalid.").build()
+            }
+        }
+    }
+}
+
+// TODO check if operands-attributes are different
+private fun isValidKeyConditionExpression(expression: ConditionExpression): Boolean {
+    fun isValidCondition(condition: ConditionExpression): Boolean {
+        if (condition !is ConditionExpression.Condition) {
+            return false
+        }
+        return condition.leftParam is Parameter.Attribute && condition.rightParam is Parameter.Value ||
+                condition.leftParam is Parameter.Value && condition.rightParam is Parameter.Attribute
+    }
+
+    return when (expression) {
+        is ConditionExpression.And -> isValidCondition(expression.left) && isValidCondition(expression.right)
+        is ConditionExpression.Condition -> isValidCondition(expression)
+        else -> false
+    }
+}
+
+private fun retrieveConditionExpression(
+    filter: Map<String, Condition>,
+    conditionalOperator: ConditionalOperator
+): ConditionExpression {
+    val conditions = filter.entries.map { (name, condition) ->
+        condition.toConditionExpression(Parameter.Attribute(QueryAttribute.Simple.Value(name)))
     }
     return conditions.reduce { expr, cond ->
-        when (conditionalOperator()) {
+        when (conditionalOperator) {
             ConditionalOperator.AND -> ConditionExpression.And(expr, cond)
             ConditionalOperator.OR -> ConditionExpression.Or(expr, cond)
             else -> throw DynamoDbException.builder()
@@ -218,8 +255,8 @@ private fun QueryRequest.retrieveFilterExpressionFromQueryFilter(): ConditionExp
     }
 }
 
-private fun Condition.toConditionExpression(attribute: ConditionExpression.Parameter.Attribute): ConditionExpression {
-    val arguments = attributeValueList().map { ConditionExpression.Parameter.Value(it) }
+private fun Condition.toConditionExpression(attribute: Parameter.Attribute): ConditionExpression {
+    val arguments = attributeValueList().map { Parameter.Value(it) }
 
     fun assertArgs(number: Int, strict: Boolean = true) {
         if (strict && number != arguments.size || !strict && number < arguments.size) {
