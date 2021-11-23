@@ -12,7 +12,7 @@ import ru.hse.dynamomock.parser.lexer.LiteralToken
 import ru.hse.dynamomock.parser.lexer.RegexToken
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 
-internal class FilterExpressionGrammar(
+internal class ConditionExpressionGrammar(
     expressionAttributeNames: Map<String, String>,
     private val expressionAttributeValues: Map<String, AttributeValue>
 ) : Grammar<ConditionExpression>() {

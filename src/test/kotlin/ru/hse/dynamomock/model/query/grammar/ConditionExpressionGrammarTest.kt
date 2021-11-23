@@ -6,8 +6,8 @@ import ru.hse.dynamomock.model.query.QueryAttribute
 import ru.hse.dynamomock.parser.grammars.GrammarTest
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 
-internal class FilterExpressionGrammarTest : GrammarTest<ConditionExpression>() {
-    override val grammar = FilterExpressionGrammar(
+internal class ConditionExpressionGrammarTest : GrammarTest<ConditionExpression>() {
+    override val grammar = ConditionExpressionGrammar(
         mapOf("#kek" to "kEk.after", "#1one" to "one_star", "#hello" to "bye"),
         mapOf(
             ":val" to atS("value"),
