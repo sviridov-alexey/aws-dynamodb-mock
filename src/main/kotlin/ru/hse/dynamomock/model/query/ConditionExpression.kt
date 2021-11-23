@@ -33,28 +33,28 @@ sealed class ConditionExpression {
     abstract fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean
 
     data class And(
-        private val left: ConditionExpression,
-        private val right: ConditionExpression
+        val left: ConditionExpression,
+        val right: ConditionExpression
     ) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>) =
             left.evaluate(attributeValues) && right.evaluate(attributeValues)
     }
 
     data class Or(
-        private val left: ConditionExpression,
-        private val right: ConditionExpression
+        val left: ConditionExpression,
+        val right: ConditionExpression
     ) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>) =
             left.evaluate(attributeValues) || right.evaluate(attributeValues)
     }
 
-    data class Not(private val expression: ConditionExpression) : ConditionExpression() {
+    data class Not(val expression: ConditionExpression) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>) = !expression.evaluate(attributeValues)
     }
 
     abstract class Condition : ConditionExpression() {
-        protected abstract val leftParam: Parameter
-        protected abstract val rightParam: Parameter
+        abstract val leftParam: Parameter
+        abstract val rightParam: Parameter
 
         protected abstract fun compare(left: AttributeTypeInfo, right: AttributeTypeInfo): Boolean
 
@@ -124,30 +124,30 @@ sealed class ConditionExpression {
     }
 
     data class Between(
-        private val param: Parameter,
-        private val leftParam: Parameter,
-        private val rightParam: Parameter
+        val param: Parameter,
+        val leftParam: Parameter,
+        val rightParam: Parameter
     ) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>) =
             And(Le(leftParam, param), Le(param, rightParam)).evaluate(attributeValues)
     }
 
     data class In(
-        private val attr: Parameter,
-        private val list: List<Parameter>
+        val attr: Parameter,
+        val list: List<Parameter>
     ) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>) =
             list.any { Eq(attr, it).evaluate(attributeValues) }
     }
 
-    data class AttributeExists(private val attr: Parameter.Attribute) : ConditionExpression() {
+    data class AttributeExists(val attr: Parameter.Attribute) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>) =
             attr.attribute.retrieve(attributeValues) != null
     }
 
     data class AttributeType(
-        private val attr: Parameter.Attribute,
-        private val type: Parameter.Value
+        val attr: Parameter.Attribute,
+        val type: Parameter.Value
     ) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean {
             val typeInfo = type.value.toAttributeTypeInfo()
@@ -158,8 +158,8 @@ sealed class ConditionExpression {
     }
 
     data class BeginsWith(
-        private val attr: Parameter.Attribute,
-        private val start: Parameter
+        val attr: Parameter.Attribute,
+        val start: Parameter
     ) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean {
             val attrTypeInfo = attr.retrieve(attributeValues)?.toAttributeTypeInfo() ?: return false
@@ -172,8 +172,8 @@ sealed class ConditionExpression {
     }
 
     data class Contains(
-        private val attr: Parameter.Attribute,
-        private val operand: Parameter
+        val attr: Parameter.Attribute,
+        val operand: Parameter
     ) : ConditionExpression() {
         override fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean {
             val attrTypeInfo = attr.retrieve(attributeValues)?.toAttributeTypeInfo() ?: return false
