@@ -36,7 +36,7 @@ private fun QueryRequest.retrieveAttributesToGet(possibleAttributes: List<String
     }
 
     val projectionExpression = projectionExpression()
-    val attributesToGet = attributesToGet()
+    val attributesToGet = attributesToGet().takeIf { hasAttributesToGet() }
     require(projectionExpression == null || attributesToGet == null) {
         "At least one value from 'projectionExpression' and 'attributesToGet' must be null."
     }
