@@ -1,8 +1,9 @@
 package ru.hse.dynamomock.model.query
 
 import ru.hse.dynamomock.model.AttributeTypeInfo
+import ru.hse.dynamomock.model.query.grammar.ConditionExpressionGrammar
 import ru.hse.dynamomock.model.toAttributeTypeInfo
-import software.amazon.awssdk.services.dynamodb.model.AttributeValue
+import software.amazon.awssdk.services.dynamodb.model.*
 
 // TODO support B and BS in some methods
 sealed class ConditionExpression {
@@ -186,6 +187,103 @@ sealed class ConditionExpression {
                 "SS" -> (attrTypeInfo.value as List<*>).contains(operandTypeInfo.value)
                 else -> throw IllegalArgumentException() // TODO
             }
+        }
+    }
+}
+
+fun QueryRequest.retrieveFilterExpression(): ConditionExpression {
+    return if (hasQueryFilter()) {
+        retrieveFilterExpressionFromQueryFilter()
+    } else {
+        val filterExpression = filterExpression() ?: throw DynamoDbException.builder()
+            .message("Nor filter expression, not query filter was provided.")
+            .build()
+        ConditionExpressionGrammar(expressionAttributeNames(), expressionAttributeValues()).parse(filterExpression)
+    }
+}
+
+private fun QueryRequest.retrieveFilterExpressionFromQueryFilter(): ConditionExpression {
+    check(hasQueryFilter())
+    val conditions = queryFilter().entries.map { (name, condition) ->
+        condition.toConditionExpression(ConditionExpression.Parameter.Attribute(QueryAttribute.Simple.Value(name)))
+    }
+    return conditions.reduce { expr, cond ->
+        when (conditionalOperator()) {
+            ConditionalOperator.AND -> ConditionExpression.And(expr, cond)
+            ConditionalOperator.OR -> ConditionExpression.Or(expr, cond)
+            else -> throw DynamoDbException.builder()
+                .message("Unknown conditional operator to combine query filter")
+                .build()
+        }
+    }
+}
+
+private fun Condition.toConditionExpression(attribute: ConditionExpression.Parameter.Attribute): ConditionExpression {
+    val arguments = attributeValueList().map { ConditionExpression.Parameter.Value(it) }
+
+    fun assertArgs(number: Int, strict: Boolean = true) {
+        if (strict && number != arguments.size || !strict && number < arguments.size) {
+            throw DynamoDbException.builder()
+                .message("Invalid number of arguments in ${comparisonOperator()}.")
+                .build()
+        }
+    }
+
+    return when (comparisonOperator()) {
+        ComparisonOperator.EQ -> {
+            assertArgs(1)
+            ConditionExpression.Eq(attribute, arguments.first())
+        }
+        ComparisonOperator.NE -> {
+            assertArgs(1)
+            ConditionExpression.Neq(attribute, arguments.first())
+        }
+        ComparisonOperator.LE -> {
+            assertArgs(1)
+            ConditionExpression.Le(attribute, arguments.first())
+        }
+        ComparisonOperator.LT -> {
+            assertArgs(1)
+            ConditionExpression.Lt(attribute, arguments.first())
+        }
+        ComparisonOperator.GE -> {
+            assertArgs(1)
+            ConditionExpression.Ge(attribute, arguments.first())
+        }
+        ComparisonOperator.GT -> {
+            assertArgs(1)
+            ConditionExpression.Gt(attribute, arguments.first())
+        }
+        ComparisonOperator.IN -> {
+            assertArgs(1, strict = false)
+            ConditionExpression.In(attribute, arguments)
+        }
+        ComparisonOperator.BETWEEN -> {
+            assertArgs(2)
+            ConditionExpression.Between(attribute, arguments[0], arguments[1])
+        }
+        ComparisonOperator.NOT_NULL -> {
+            assertArgs(0)
+            ConditionExpression.AttributeExists(attribute)
+        }
+        ComparisonOperator.NULL -> {
+            assertArgs(0)
+            ConditionExpression.Not(ConditionExpression.AttributeExists(attribute))
+        }
+        ComparisonOperator.CONTAINS -> {
+            assertArgs(1)
+            ConditionExpression.Contains(attribute, arguments.first())
+        }
+        ComparisonOperator.NOT_CONTAINS -> {
+            assertArgs(1)
+            ConditionExpression.Not(ConditionExpression.Contains(attribute, arguments.first()))
+        }
+        ComparisonOperator.BEGINS_WITH -> {
+            assertArgs(1)
+            ConditionExpression.BeginsWith(attribute, arguments.first())
+        }
+        else -> {
+            throw DynamoDbException.builder().message("Unknown comparison operator in filter expression").build()
         }
     }
 }
