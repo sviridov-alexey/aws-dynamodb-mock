@@ -192,48 +192,34 @@ sealed interface ConditionExpression {
     }
 }
 
-fun QueryRequest.retrieveFilterExpression(): ConditionExpression {
+fun QueryRequest.retrieveFilterExpression(): ConditionExpression? {
     return if (hasQueryFilter()) {
         retrieveConditionExpression(queryFilter(), conditionalOperator())
-    } else {
-        val filterExpression = filterExpression() ?: throw DynamoDbException.builder()
-            .message("Nor filter expression, not query filter was provided.")
-            .build()
+    } else if (filterExpression() != null) {
+        val filterExpression = filterExpression()
         ConditionExpressionGrammar(expressionAttributeNames(), expressionAttributeValues()).parse(filterExpression)
+    } else {
+        null
     }
 }
 
-fun QueryRequest.retrieveKeyConditionExpression(): ConditionExpression {
+fun QueryRequest.retrieveKeyConditions(): Map<String, Condition> {
     return if (hasKeyConditions()) {
-        retrieveConditionExpression(keyConditions(), ConditionalOperator.AND)
+        keyConditions()
     } else {
         val keyConditionExpression = keyConditionExpression() ?: throw DynamoDbException.builder()
-            .message("Nor key condition expression, nor key conditions were provided.")
+            .message("Nor key conditions, nor key condition expression was provided.")
             .build()
-        ConditionExpressionGrammar(
-            expressionAttributeNames(), expressionAttributeValues()
-        ).parse(keyConditionExpression).also {
-            if (!isValidKeyConditionExpression(it)) {
-                throw DynamoDbException.builder().message("Key condition expression is invalid.").build()
-            }
-        }
-    }
-}
+        val conditionExpression = ConditionExpressionGrammar(expressionAttributeNames(), expressionAttributeValues())
+            .parse(keyConditionExpression)
 
-// TODO check if operands-attributes are different
-private fun isValidKeyConditionExpression(expression: ConditionExpression): Boolean {
-    fun isValidCondition(condition: ConditionExpression): Boolean {
-        if (condition !is ConditionExpression.Condition) {
-            return false
+        when (conditionExpression) {
+            is ConditionExpression.And -> mapOf(
+                conditionExpression.left.toKeyCondition(),
+                conditionExpression.right.toKeyCondition()
+            )
+            else -> mapOf(conditionExpression.toKeyCondition())
         }
-        return condition.leftParam is Parameter.Attribute && condition.rightParam is Parameter.Value ||
-                condition.leftParam is Parameter.Value && condition.rightParam is Parameter.Attribute
-    }
-
-    return when (expression) {
-        is ConditionExpression.And -> isValidCondition(expression.left) && isValidCondition(expression.right)
-        is ConditionExpression.Condition -> isValidCondition(expression)
-        else -> false
     }
 }
 
@@ -323,4 +309,58 @@ private fun Condition.toConditionExpression(attribute: Parameter.Attribute): Con
             throw DynamoDbException.builder().message("Unknown comparison operator in filter expression").build()
         }
     }
+}
+
+private fun QueryAttribute.toValue(): QueryAttribute.Simple.Value =
+    this as? QueryAttribute.Simple.Value ?: throw DynamoDbException.builder()
+        .message("Attribute in key comparison must have type from [N, S, B]").build()
+
+private fun ConditionExpression.toKeyCondition(): Pair<String, Condition> = when (this) {
+    is ConditionExpression.Neq -> {
+        throw DynamoDbException.builder()
+            .message("Comparison in key condition expression cannot have <> operator.").build()
+    }
+    is ConditionExpression.Comparison -> {
+        val attributeParameter = leftParam as? Parameter.Attribute
+            ?: rightParam as? Parameter.Attribute
+            ?: throw DynamoDbException.builder()
+                .message("Comparison in key condition expression must contain exactly one attribute.").build()
+        val attribute = attributeParameter.attribute.toValue()
+        val valueParameter = leftParam as? Parameter.Value
+            ?: rightParam as? Parameter.Value
+            ?: throw DynamoDbException.builder()
+                .message("Comparison in key condition expression must contain exactly on value.").build()
+
+        attribute.name to Condition.builder()
+            .comparisonOperator(this::class.simpleName!!)
+            .attributeValueList(valueParameter.value)
+            .build()
+    }
+    is ConditionExpression.BeginsWith -> {
+        val attribute = attr.attribute.toValue()
+        val valueParameter = start as? Parameter.Value ?: throw DynamoDbException.builder()
+            .message("BeginsWith in key condition expression must have value as the second parameter.")
+            .build()
+
+        attribute.name to Condition.builder()
+            .comparisonOperator(ComparisonOperator.BEGINS_WITH)
+            .attributeValueList(valueParameter.value)
+            .build()
+    }
+    is ConditionExpression.Between -> {
+        val attribute = (param as? Parameter.Attribute)?.attribute?.toValue() ?: throw DynamoDbException.builder()
+            .message("Between in key condition expression must have simple attribute as the first parameter.")
+            .build()
+        val valueParameters = listOf(leftParam, rightParam).map {
+            it as? Parameter.Value ?: throw DynamoDbException.builder()
+                .message("Between in key condition expression must have values as the second and third parameters")
+                .build()
+        }
+
+        attribute.name to Condition.builder()
+            .comparisonOperator(ComparisonOperator.BETWEEN)
+            .attributeValueList(valueParameters.map { it.value })
+            .build()
+    }
+    else -> throw DynamoDbException.builder().message("Unsupported operation in key condition expression").build()
 }
