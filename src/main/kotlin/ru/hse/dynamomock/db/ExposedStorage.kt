@@ -7,6 +7,7 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import ru.hse.dynamomock.model.*
 import ru.hse.dynamomock.model.Key
+import software.amazon.awssdk.services.dynamodb.model.Condition
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException
 import java.security.MessageDigest
 import java.util.*
@@ -28,12 +29,13 @@ class ExposedStorage : DataStorageLayer {
     }
 
     override fun deleteTable(tableName: String) {
-        val name = hashTableName(tableName)
-        require(name in tables) {
-            "Cannot delete non-existent table."
-        }
-        transaction(database) { SchemaUtils.drop(tables.getValue(name)) }
-        tables.remove(name)
+        val table = getTable(tableName)
+        transaction(database) { SchemaUtils.drop(table) }
+        tables.remove(hashTableName(tableName))
+    }
+
+    override fun query(tableName: String, keyConditions: Map<String, Condition>): List<List<AttributeInfo>> {
+        TODO()
     }
 
     private fun createKeyCondition(

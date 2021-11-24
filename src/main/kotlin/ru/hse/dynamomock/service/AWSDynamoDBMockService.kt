@@ -2,6 +2,9 @@ package ru.hse.dynamomock.service
 
 import ru.hse.dynamomock.db.DataStorageLayer
 import ru.hse.dynamomock.model.*
+import ru.hse.dynamomock.model.query.retrieveAttributesTransformer
+import ru.hse.dynamomock.model.query.retrieveFilterExpression
+import ru.hse.dynamomock.model.query.retrieveKeyConditions
 import software.amazon.awssdk.services.dynamodb.model.*
 import java.util.*
 
@@ -41,9 +44,52 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     fun describeTable(request: DescribeTableRequest): TableDescription {
         val name = request.tableName()
         require(name in tablesMetadata) {
-            "Cannot describe non-existent table."
+            "Cannot describe non-existent table $name."
         }
         return tablesMetadata.getValue(name).toTableDescription()
+    }
+
+    // TODO support exclusiveStartKey and limit
+    // TODO take into account that it's impossible to use expression-like and not-expression-like at the same query
+    fun query(request: QueryRequest): QueryResponse {
+        require(request.indexName() == null) {
+            "Indexes are not supported in query yet."
+        }
+        require(request.consistentRead()) {
+            "Non-consistent read is not supported in query yet."
+        }
+        val tableName = request.tableName()
+        require(tableName in tablesMetadata) {
+            "Cannot query from non-existent table $tableName."
+        }
+        val table = tablesMetadata.getValue(tableName)
+
+        val keyConditions = request.retrieveKeyConditions()
+        val items = storage.query(tableName, keyConditions).let {
+            if (request.scanIndexForward()) it else it.reversed()
+        }.map { item ->
+            item.associate { it.name to it.type.toAttributeValue() }.toMutableMap().apply {
+                remove(table.partitionKey)
+                remove(table.sortKey)
+            }.toMap()
+        }
+
+        val filterExpression = request.retrieveFilterExpression()
+        val filteredItems = filterExpression?.let { items.filter { filterExpression.evaluate(it) } } ?: items
+
+        require(!request.hasAttributesToGet() || request.select() == null || request.select() == Select.SPECIFIC_ATTRIBUTES) {
+            "Incorrect usage of attributes to get and select."
+        }
+
+        val responseBuilder = QueryResponse.builder()
+            .count(filteredItems.size)
+            .scannedCount(items.size)
+        return if (request.select() == Select.COUNT) {
+            responseBuilder.build()
+        } else {
+            val transformer = request.retrieveAttributesTransformer()
+            responseBuilder.items(filteredItems.map(transformer)).build()
+        }
     }
 
     fun putItem(request: PutItemRequest): PutItemResponse {
