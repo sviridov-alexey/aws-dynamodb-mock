@@ -145,10 +145,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                 .message("Cannot do operations on a non-existent table").build()
         }
 
-        var batchSize = 0
-        requestItems.entries.forEach {
-            batchSize += it.value.size
-        }
+        val batchSize = requestItems.entries.sumOf { it.value.size }
 
         if (batchSize > 25) {
             throw DynamoDbException.builder()
@@ -157,7 +154,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         }
 
         requestItems.entries.forEach{ tableRequests ->
-            val items = mutableListOf<Map<String, AttributeValue>>()
+            val items = mutableSetOf<Map<String, AttributeValue>>()
             val tableName = tableRequests.key
             tableRequests.value.forEach{
                 val putRequest = it.putRequest()
@@ -171,24 +168,31 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                     val keys = putRequest.item().filter { item ->
                         item.key == partitionKey.attributeName ||  item.key == sortKey?.attributeName
                     }
+                    if (items.contains(keys)) {
+                        throw DynamoDbException.builder()
+                            .message("Provided list of item keys contains duplicates")
+                            .build()
+                    }
                     items.add(keys)
                     val itemsList = putRequest.item().map { (k, v) -> AttributeInfo(k, toAttributeTypeInfo(v)) }
                     putItemRequests.add(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
                 } else if (deleteRequest != null && deleteRequest.hasKey() && (putRequest == null || !putRequest.hasItem())) {
                     val (partitionKey, sortKey) = getRequestMetadata(tableName, deleteRequest.key())
-                    items.add(deleteRequest.key())
+
+                    val keys = deleteRequest.key()
+                    if (items.contains(keys)) {
+                        throw DynamoDbException.builder()
+                            .message("Provided list of item keys contains duplicates")
+                            .build()
+                    }
+
+                    items.add(keys)
                     deleteItemRequests.add(DBDeleteItemRequest(tableName, partitionKey, sortKey))
                 } else {
                     throw DynamoDbException.builder()
                         .message("Supplied AttributeValue has more than one datatypes set, must contain exactly one of the supported datatypes")
                         .build()
                 }
-            }
-
-            if (items.toSet().size < items.size) {
-                throw DynamoDbException.builder()
-                    .message("Provided list of item keys contains duplicates")
-                    .build()
             }
 
         }
@@ -217,7 +221,10 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                 .message("One of the required keys was not given a value")
                 .build()
         val (keyType, key) = toKey(keyName, keyAttributeValue)
-        val expectedKeyType = attributeDefinitions.first { it.attributeName() == keyName }
+        val expectedKeyType =
+            attributeDefinitions.firstOrNull { it.attributeName() == keyName } ?: throw DynamoDbException.builder()
+                .message("hello") // todo: normal text
+                .build()
         if (expectedKeyType.attributeTypeAsString().uppercase() != keyType) {
             throw DynamoDbException.builder()
                 .message("Invalid attribute value type")

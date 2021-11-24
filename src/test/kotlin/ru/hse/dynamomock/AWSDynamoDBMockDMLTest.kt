@@ -1,5 +1,8 @@
 package ru.hse.dynamomock
 
+import assertk.assertThat
+import assertk.assertions.hasMessage
+import assertk.assertions.isFailure
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -16,7 +19,6 @@ import software.amazon.awssdk.services.dynamodb.model.DeleteRequest
 import software.amazon.awssdk.services.dynamodb.model.DynamoDbException
 import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement
 import software.amazon.awssdk.services.dynamodb.model.PutRequest
-import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException
 
 import software.amazon.awssdk.services.dynamodb.model.ReturnValue
 import software.amazon.awssdk.services.dynamodb.model.WriteRequest
@@ -81,7 +83,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         }
     }
 
-    private fun createAnyTable(name: String) {
+    private fun createTable(name: String) {
         val attributeDefinitions = listOf<AttributeDefinition>(
             AttributeDefinition.builder()
                 .attributeName(partitionKeyName)
@@ -113,7 +115,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
     @BeforeEach
     fun createTable() {
-        createAnyTable(tableName)
+        createTable(tableName)
     }
 
     @ParameterizedTest
@@ -230,8 +232,10 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @MethodSource("items")
     fun `test throws when wrong returnValues`(item: Map<String, AttributeValue>) {
         val request = putItemRequestBuilder(tableName, item, ReturnValue.UPDATED_NEW)
-       val e = assertThrows<DynamoDbException> {  mock.putItem(request) }
-        assertEquals("Return values set to invalid value", e.message)
+
+        assertThat {
+            mock.putItem(request)
+        }.isFailure().hasMessage("Return values set to invalid value")
     }
 
     @Test
@@ -243,8 +247,10 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             "column4" to AttributeValue.builder().ss(listOf("we", "are", "strings")).build()
         )
         val request = putItemRequestBuilder(tableName, item)
-        val e = assertThrows<DynamoDbException> {  mock.putItem(request) }
-        assertEquals("One of the required keys was not given a value", e.message)
+
+        assertThat {
+            mock.putItem(request)
+        }.isFailure().hasMessage("One of the required keys was not given a value")
     }
 
     @Test
@@ -256,8 +262,10 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             "column4" to AttributeValue.builder().ss(listOf("we", "are", "strings")).build()
         )
         val request = putItemRequestBuilder(tableName, item)
-        val e = assertThrows<DynamoDbException> {  mock.putItem(request) }
-        assertEquals("Invalid attribute value type", e.message)
+
+        assertThat {
+            mock.putItem(request)
+        }.isFailure().hasMessage("Invalid attribute value type")
     }
 
     @Test
@@ -269,8 +277,9 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             "column4" to AttributeValue.builder().ss(listOf("we", "are", "strings")).build()
         )
         val request = putItemRequestBuilder(tableName, item)
-        val e = assertThrows<DynamoDbException> {  mock.putItem(request) }
-        assertEquals("Member must satisfy enum value set: [B, N, S]", e.message)
+        assertThat {
+            mock.putItem(request)
+        }.isFailure().hasMessage("Member must satisfy enum value set: [B, N, S]")
     }
 
     @Test
@@ -282,8 +291,9 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             "column4" to AttributeValue.builder().ss(listOf("we", "are", "strings")).build()
         )
         val request = putItemRequestBuilder("wrongTableName", item)
-        val e = assertThrows<ResourceNotFoundException> {  mock.putItem(request) }
-        assertEquals("Cannot do operations on a non-existent table", e.message)
+        assertThat {
+            mock.putItem(request)
+        }.isFailure().hasMessage("Cannot do operations on a non-existent table")
     }
 
     @Test
@@ -353,8 +363,10 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         val batchWriteItemRequest = BatchWriteItemRequest.builder()
             .requestItems(requestItems)
             .build()
-        val e = assertThrows<DynamoDbException> { mock.batchWriteItem(batchWriteItemRequest) }
-        assertEquals("Cannot do operations on a non-existent table", e.message)
+
+        assertThat {
+            mock.batchWriteItem(batchWriteItemRequest)
+        }.isFailure().hasMessage("Cannot do operations on a non-existent table")
     }
 
     @Test
@@ -395,10 +407,11 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         val batchWriteItemRequest = BatchWriteItemRequest.builder()
             .requestItems(requestItems)
             .build()
-        val e = assertThrows<DynamoDbException> { mock.batchWriteItem(batchWriteItemRequest) }
-        assertEquals(
-            "Supplied AttributeValue has more than one datatypes set, must contain exactly one of the supported datatypes",
-            e.message)
+
+        assertThat {
+            mock.batchWriteItem(batchWriteItemRequest)
+        }.isFailure()
+            .hasMessage("Supplied AttributeValue has more than one datatypes set, must contain exactly one of the supported datatypes")
     }
 
     @ParameterizedTest
@@ -426,10 +439,11 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         val batchWriteItemRequest = BatchWriteItemRequest.builder()
             .requestItems(requestItems)
             .build()
-        val e = assertThrows<DynamoDbException> { mock.batchWriteItem(batchWriteItemRequest) }
-        assertEquals(
-            "Provided list of item keys contains duplicates",
-            e.message)
+
+        assertThat {
+            mock.batchWriteItem(batchWriteItemRequest)
+        }.isFailure()
+            .hasMessage("Provided list of item keys contains duplicates")
     }
 
     @Test
@@ -458,10 +472,11 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         val batchWriteItemRequest = BatchWriteItemRequest.builder()
             .requestItems(requestItems)
             .build()
-        val e = assertThrows<DynamoDbException> { mock.batchWriteItem(batchWriteItemRequest) }
-        assertEquals(
-            "Too many items requested for the BatchWriteItem call",
-            e.message)
+
+        assertThat {
+            mock.batchWriteItem(batchWriteItemRequest)
+        }.isFailure()
+            .hasMessage("Too many items requested for the BatchWriteItem call")
     }
 
     @Test
@@ -484,7 +499,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
                 .build())
         }
 
-        createAnyTable("testTable2")
+        createTable("testTable2")
         val itemsList2 = mutableListOf<WriteRequest>()
         var str2 = "whatever is takes"
         for (i in 0..12) {
@@ -510,10 +525,11 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         val batchWriteItemRequest = BatchWriteItemRequest.builder()
             .requestItems(requestItems)
             .build()
-        val e = assertThrows<DynamoDbException> { mock.batchWriteItem(batchWriteItemRequest) }
-        assertEquals(
-            "Too many items requested for the BatchWriteItem call",
-            e.message)
+
+        assertThat {
+            mock.batchWriteItem(batchWriteItemRequest)
+        }.isFailure()
+            .hasMessage("Too many items requested for the BatchWriteItem call")
     }
 
     @Test
