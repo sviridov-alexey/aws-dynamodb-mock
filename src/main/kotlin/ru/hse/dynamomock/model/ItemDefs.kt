@@ -65,3 +65,16 @@ class NumKey(
     attributeName: String,
     val attributeValue: BigDecimal
 ) : Key(attributeName)
+
+enum class DynamoType {
+    S,
+    N,
+    B,
+    SS,
+    NS,
+    BS,
+    BOOL,
+    NULL,
+    M,
+    L
+}

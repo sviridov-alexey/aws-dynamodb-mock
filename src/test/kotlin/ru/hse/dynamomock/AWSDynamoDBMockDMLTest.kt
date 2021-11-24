@@ -269,6 +269,20 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     }
 
     @Test
+    fun `test more keys than it should be`() {
+        val item = mapOf(
+            partitionKeyName to AttributeValue.builder().s("key2").build(),
+            sortKeyName to AttributeValue.builder().n("2").build(),
+            "column3" to AttributeValue.builder().s("i am string").build(),
+        )
+        val request = getItemRequestBuilder(tableName, item.keys.toList(), item)
+
+        assertThat {
+            mock.getItem(request)
+        }.isFailure().hasMessage("The number of conditions on the keys is invalid")
+    }
+
+    @Test
     fun `test key type not from b, n, s`() {
         val item = mapOf(
             partitionKeyName to AttributeValue.builder().ss(listOf("key2")).build(),
