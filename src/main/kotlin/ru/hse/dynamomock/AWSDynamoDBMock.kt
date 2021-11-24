@@ -49,6 +49,10 @@ class AWSDynamoDBMock : DynamoDbClient {
         return service.deleteItem(deleteItemRequest)
     }
 
+    override fun batchWriteItem(batchWriteItemRequest: BatchWriteItemRequest): BatchWriteItemResponse {
+        return service.batchWriteItem(batchWriteItemRequest)
+    }
+
     companion object {
         private const val SERVICE_NAME = "dynamodb"
     }
