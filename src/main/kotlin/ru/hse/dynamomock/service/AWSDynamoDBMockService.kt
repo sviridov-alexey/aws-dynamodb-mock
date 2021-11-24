@@ -223,7 +223,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         val (keyType, key) = toKey(keyName, keyAttributeValue)
         val expectedKeyType =
             attributeDefinitions.firstOrNull { it.attributeName() == keyName } ?: throw DynamoDbException.builder()
-                .message("hello") // todo: normal text
+                .message("One of the required keys was not given a value")
                 .build()
         if (expectedKeyType.attributeTypeAsString().uppercase() != keyType) {
             throw DynamoDbException.builder()
