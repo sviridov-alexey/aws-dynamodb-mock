@@ -54,7 +54,7 @@ sealed class ConditionExpression {
         override fun evaluate(attributeValues: Map<String, AttributeValue>) = !expression.evaluate(attributeValues)
     }
 
-    abstract class Condition : ConditionExpression() {
+    abstract class Comparison : ConditionExpression() {
         abstract val leftParam: Parameter
         abstract val rightParam: Parameter
 
@@ -75,18 +75,18 @@ sealed class ConditionExpression {
     data class Eq(
         override val leftParam: Parameter,
         override val rightParam: Parameter
-    ) : Condition() {
+    ) : Comparison() {
         override fun compare(left: AttributeTypeInfo, right: AttributeTypeInfo) = left.value == right.value
     }
 
     data class Neq(
         override val leftParam: Parameter,
         override val rightParam: Parameter
-    ) : Condition() {
+    ) : Comparison() {
         override fun compare(left: AttributeTypeInfo, right: AttributeTypeInfo) = left.value != right.value
     }
 
-    abstract class ConditionWithComparable : Condition() {
+    abstract class ComparisonWithComparable : Comparison() {
         abstract fun <T : Comparable<T>> compare(left: T, right: T): Boolean
 
         final override fun compare(left: AttributeTypeInfo, right: AttributeTypeInfo) = when (left.typeAsString) {
@@ -100,28 +100,28 @@ sealed class ConditionExpression {
     data class Le(
         override val leftParam: Parameter,
         override val rightParam: Parameter
-    ) : ConditionWithComparable() {
+    ) : ComparisonWithComparable() {
         override fun <T : Comparable<T>> compare(left: T, right: T) = left <= right
     }
 
     data class Lt(
         override val leftParam: Parameter,
         override val rightParam: Parameter
-    ) : ConditionWithComparable() {
+    ) : ComparisonWithComparable() {
         override fun <T : Comparable<T>> compare(left: T, right: T) = left < right
     }
 
     data class Ge(
         override val leftParam: Parameter,
         override val rightParam: Parameter
-    )  : ConditionWithComparable() {
+    )  : ComparisonWithComparable() {
         override fun <T : Comparable<T>> compare(left: T, right: T) = left >= right
     }
 
     data class Gt(
         override val leftParam: Parameter,
         override val rightParam: Parameter
-    )  : ConditionWithComparable() {
+    )  : ComparisonWithComparable() {
         override fun <T : Comparable<T>> compare(left: T, right: T) = left > right
     }
 
