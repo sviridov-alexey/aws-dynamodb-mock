@@ -33,26 +33,40 @@ sealed interface QueryAttribute {
     }
 }
 
-private fun QueryRequest.retrieveAttributesToGet(possibleAttributes: List<String>): List<QueryAttribute> {
-    if (indexName() != null) {
-        throw UnsupportedOperationException("Indexes are not supported yet.")
+fun QueryRequest.retrieveAttributesTransformer(): (Map<String, AttributeValue>) -> (Map<String, AttributeValue>) {
+    require(indexName() == null || select() == Select.ALL_PROJECTED_ATTRIBUTES) {
+        "Indexes are not supported in query yet."
     }
+
     if (select() == Select.ALL_ATTRIBUTES || select() == Select.COUNT) {
-        return possibleAttributes.map { QueryAttribute.Simple.Value(it) }
-    } else if (select() == Select.ALL_PROJECTED_ATTRIBUTES) {
-        throw UnsupportedOperationException("Indexes are not supported yet.")
+        return { it }
     }
 
     val projectionExpression = projectionExpression()
     val attributesToGet = attributesToGet().takeIf { hasAttributesToGet() }
-    require(projectionExpression == null || attributesToGet == null) {
-        "At least one value from 'projectionExpression' and 'attributesToGet' must be null."
+    if (projectionExpression == null && attributesToGet == null) {
+        return { it }
     }
+
+    // TODO take into account overlapped paths in projection
     if (projectionExpression != null) {
-        return ProjectionExpressionGrammar(expressionAttributeNames() ?: emptyMap()).parse(projectionExpression())
+        val grammar = ProjectionExpressionGrammar(expressionAttributeNames() ?: emptyMap())
+        val projection = grammar.parse(projectionExpression)
+        return { items ->
+            projection.mapNotNull { attribute ->
+                val name = attribute.simpleName
+                if (name in items) {
+                    attribute.retrieve(mapOf(name to items.getValue(name)))?.let { name to it }
+                } else {
+                    null
+                }
+            }.toMap()
+        }
+    } else if (attributesToGet != null) {
+        return { items ->
+            attributesToGet.mapNotNull { if (it in items) it to items.getValue(it) else null }.toMap()
+        }
+    } else {
+        return { it }
     }
-    if (attributesToGet != null) {
-        return attributesToGet.map { QueryAttribute.Simple.Value(it) }
-    }
-    return possibleAttributes.map { QueryAttribute.Simple.Value(it) }
 }
