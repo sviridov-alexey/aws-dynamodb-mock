@@ -7,7 +7,7 @@ import ru.hse.dynamomock.model.toAttributeTypeInfo
 import software.amazon.awssdk.services.dynamodb.model.*
 
 // TODO support B and BS in some methods
-sealed class ConditionExpression {
+sealed interface ConditionExpression {
     // TODO maybe introduce interface for `retrieve`
     sealed interface Parameter {
         data class Attribute(val attribute: QueryAttribute) : Parameter
@@ -32,12 +32,12 @@ sealed class ConditionExpression {
         }
     }
 
-    abstract fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean
+    fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean
 
     data class And(
         val left: ConditionExpression,
         val right: ConditionExpression
-    ) : ConditionExpression() {
+    ) : ConditionExpression {
         override fun evaluate(attributeValues: Map<String, AttributeValue>) =
             left.evaluate(attributeValues) && right.evaluate(attributeValues)
     }
@@ -45,16 +45,16 @@ sealed class ConditionExpression {
     data class Or(
         val left: ConditionExpression,
         val right: ConditionExpression
-    ) : ConditionExpression() {
+    ) : ConditionExpression {
         override fun evaluate(attributeValues: Map<String, AttributeValue>) =
             left.evaluate(attributeValues) || right.evaluate(attributeValues)
     }
 
-    data class Not(val expression: ConditionExpression) : ConditionExpression() {
+    data class Not(val expression: ConditionExpression) : ConditionExpression {
         override fun evaluate(attributeValues: Map<String, AttributeValue>) = !expression.evaluate(attributeValues)
     }
 
-    abstract class Comparison : ConditionExpression() {
+    abstract class Comparison : ConditionExpression {
         abstract val leftParam: Parameter
         abstract val rightParam: Parameter
 
@@ -129,7 +129,7 @@ sealed class ConditionExpression {
         val param: Parameter,
         val leftParam: Parameter,
         val rightParam: Parameter
-    ) : ConditionExpression() {
+    ) : ConditionExpression {
         override fun evaluate(attributeValues: Map<String, AttributeValue>) =
             And(Le(leftParam, param), Le(param, rightParam)).evaluate(attributeValues)
     }
@@ -137,12 +137,12 @@ sealed class ConditionExpression {
     data class In(
         val attr: Parameter,
         val list: List<Parameter>
-    ) : ConditionExpression() {
+    ) : ConditionExpression {
         override fun evaluate(attributeValues: Map<String, AttributeValue>) =
             list.any { Eq(attr, it).evaluate(attributeValues) }
     }
 
-    data class AttributeExists(val attr: Parameter.Attribute) : ConditionExpression() {
+    data class AttributeExists(val attr: Parameter.Attribute) : ConditionExpression {
         override fun evaluate(attributeValues: Map<String, AttributeValue>) =
             attr.attribute.retrieve(attributeValues) != null
     }
@@ -150,7 +150,7 @@ sealed class ConditionExpression {
     data class AttributeType(
         val attr: Parameter.Attribute,
         val type: Parameter.Value
-    ) : ConditionExpression() {
+    ) : ConditionExpression {
         override fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean {
             val typeInfo = type.value.toAttributeTypeInfo()
             require(typeInfo.typeAsString == "S")
@@ -162,7 +162,7 @@ sealed class ConditionExpression {
     data class BeginsWith(
         val attr: Parameter.Attribute,
         val start: Parameter
-    ) : ConditionExpression() {
+    ) : ConditionExpression {
         override fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean {
             val attrTypeInfo = attr.retrieve(attributeValues)?.toAttributeTypeInfo() ?: return false
             val startTypeInfo = start.retrieve(attributeValues)?.toAttributeTypeInfo() ?: return false
@@ -176,7 +176,7 @@ sealed class ConditionExpression {
     data class Contains(
         val attr: Parameter.Attribute,
         val operand: Parameter
-    ) : ConditionExpression() {
+    ) : ConditionExpression {
         override fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean {
             val attrTypeInfo = attr.retrieve(attributeValues)?.toAttributeTypeInfo() ?: return false
             val operandTypeInfo = operand.retrieve(attributeValues)?.toAttributeTypeInfo() ?: return false
