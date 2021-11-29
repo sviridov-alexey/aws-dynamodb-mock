@@ -195,6 +195,14 @@ internal class AWSDynamoDBMockScanItemsTest : AWSDynamoDBMockTest() {
                         AttributeValue.builder().n("3.14159").build()
                     )
                 )
+                .build(),
+            "column3" to AttributeValue.builder()
+                .m(
+                    mapOf(
+                        "Name" to AttributeValue.builder().s("Joe").build(),
+                        "Age" to AttributeValue.builder().n("35").build()
+                    )
+                )
                 .build()
         )
 

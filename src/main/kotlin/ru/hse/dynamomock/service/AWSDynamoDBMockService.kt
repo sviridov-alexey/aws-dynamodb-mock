@@ -15,21 +15,21 @@ import java.util.EnumSet
 class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     private val tablesMetadata = mutableMapOf<String, TableMetadata>()
 
-    private fun toAttributeTypeInfo(value: AttributeValue) : AttributeTypeInfo =
+    private fun toAttributeTypeInfo(value: AttributeValue): AttributeTypeInfo =
         AttributeTypeInfo(
             s = value.s(),
             n = value.n(),
             b = value.b()?.let { Base64.getEncoder().encodeToString(value.b().asByteArray()) },
             ss = value.ss().takeIf { value.hasSs() },
             ns = value.ns().takeIf { value.hasNs() },
-            bs = value.bs().map {  Base64.getEncoder().encodeToString(it.asByteArray()) }.takeIf { value.hasBs() },
+            bs = value.bs().map { Base64.getEncoder().encodeToString(it.asByteArray()) }.takeIf { value.hasBs() },
             m = value.m().mapValues { toAttributeTypeInfo(it.value) }.takeIf { value.hasM() },
             l = value.l()?.map { toAttributeTypeInfo(it) }.takeIf { value.hasL() },
             bool = value.bool(),
             nul = value.nul()
         )
 
-    private fun toAttributeValue(info: AttributeTypeInfo) : AttributeValue =
+    private fun toAttributeValue(info: AttributeTypeInfo): AttributeValue =
         AttributeValue.builder()
             .s(info.s)
             .n(info.n)
@@ -42,7 +42,6 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             .bool(info.bool)
             .nul(info.nul)
             .build()
-
 
     private fun toKey(keyName: String, attributeValue: AttributeValue): Pair<String, Key> =
         if (attributeValue.s() != null) {
@@ -148,7 +147,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         val putItemRequests = mutableListOf<DBPutItemRequest>()
         val deleteItemRequests = mutableListOf<DBDeleteItemRequest>()
 
-        requestItems.keys.forEach{
+        requestItems.keys.forEach {
             tablesMetadata[it] ?: throw ResourceNotFoundException.builder()
                 .message("Cannot do operations on a non-existent table").build()
         }
@@ -161,10 +160,10 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                 .build()
         }
 
-        requestItems.entries.forEach{ tableRequests ->
+        requestItems.entries.forEach { tableRequests ->
             val items = mutableSetOf<Map<String, AttributeValue>>()
             val tableName = tableRequests.key
-            tableRequests.value.forEach{
+            tableRequests.value.forEach {
                 val putRequest = it.putRequest()
                 val deleteRequest = it.deleteRequest()
                 if (putRequest == null && deleteRequest == null) {
@@ -174,7 +173,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                 } else if (putRequest != null && putRequest.hasItem() && (deleteRequest == null || !deleteRequest.hasKey())) {
                     val (partitionKey, sortKey) = getRequestMetadata(tableName, putRequest.item())
                     val keys = putRequest.item().filter { item ->
-                        item.key == partitionKey.attributeName ||  item.key == sortKey?.attributeName
+                        item.key == partitionKey.attributeName || item.key == sortKey?.attributeName
                     }
                     if (items.contains(keys)) {
                         throw DynamoDbException.builder()
@@ -205,7 +204,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
         }
 
-        putItemRequests.forEach{
+        putItemRequests.forEach {
             val attributes = getAttributesFromReturnValues(
                 ReturnValue.ALL_OLD,
                 DBGetItemRequest(it.tableName, it.partitionKey, it.sortKey)
@@ -216,14 +215,14 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                 storage.updateItem(it)
             }
         }
-        deleteItemRequests.forEach{ storage.deleteItem(it) }
+        deleteItemRequests.forEach { storage.deleteItem(it) }
 
         return BatchWriteItemResponse.builder()
             .build()
     }
 
     fun scanItems(fileName: String, tableName: String) {
-        val allowedTypes = EnumSet.of(SS, S, N, NS, L, BOOL, NULL)
+        val allowedTypes = EnumSet.of(SS, S, N, NS, L, M, BOOL, NULL)
         val columnsInfo = mutableListOf<Pair<String, String>>()
 
         File(fileName).useLines { line ->
@@ -248,22 +247,21 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         val itemsList = mutableListOf<Map<String, AttributeValue>>()
         File(fileName).forEachLine {
             if (i != 0) {
-                val columnValues = it.split(";")
+                val columnValues = it.split(";").map { v -> v.trim() }
                 if (columnValues.size != columnsInfo.size) {
-                    throw AWSMockCSVException("${i+1} row's size doesn't match the size of first row")
+                    throw AWSMockCSVException("${i + 1} row's size doesn't match the size of first row")
                 }
                 val item = columnValues.mapIndexed { index, element ->
-                    element.trim()
                     val (columnName, type) = columnsInfo[index]
-                    columnName to when(DynamoType.valueOf(type)) {
+                    columnName to when (DynamoType.valueOf(type)) {
                         S -> AttributeValue.builder().s(element).build()
                         N -> AttributeValue.builder().n(element).build()
                         NS -> {
-                            val list = element.split(";")
+                            val list = element.split(",")
                             AttributeValue.builder().ns(list).build()
                         }
                         SS -> {
-                            val list = element.split(";")
+                            val list = element.split(",")
                             AttributeValue.builder().ss(list).build()
                         }
                         NULL -> {
@@ -273,9 +271,23 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                             AttributeValue.builder().bool(element == "true").build()
                         }
                         L -> {
-                            val attributeValues = element.split(",")
+                            val attributeValues = element.split(",").map { v -> v.trim() }
                             AttributeValue.builder()
-                                .l(attributeValues.map { value -> toAttributeValue(Json.decodeFromString(value)) }).build()
+                                .l(attributeValues.map { value -> toAttributeValue(Json.decodeFromString(value)) })
+                                .build()
+                        }
+                        M -> {
+                            val attributeValues = element.split(",").map { v -> v.trim() }
+                            AttributeValue.builder().m(
+                                attributeValues.associate { mapValue ->
+                                    val nameAndValue = mapValue.split(":", limit = 2).map { v -> v.trim() }
+                                    nameAndValue[0].substring(1, nameAndValue[0].length - 1) to toAttributeValue(
+                                        Json.decodeFromString(
+                                            nameAndValue[1]
+                                        )
+                                    )
+                                }
+                            ).build()
                         }
                         else -> throw AWSMockCSVException("Function scanItems supports only S, N, NS, SS, NULL, BOOL types right now")
                     }
@@ -295,7 +307,11 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         }
     }
 
-    private fun getKeyFromMetadata(keyName: String, keys: Map<String, AttributeValue>, attributeDefinitions: List<AttributeDefinition>): Key {
+    private fun getKeyFromMetadata(
+        keyName: String,
+        keys: Map<String, AttributeValue>,
+        attributeDefinitions: List<AttributeDefinition>
+    ): Key {
         val keyAttributeValue =
             keys[keyName] ?: throw DynamoDbException
                 .builder()
@@ -314,7 +330,11 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         return key
     }
 
-    private fun getSortKeyFromMetadata(sortKeyName: String?, keys: Map<String, AttributeValue>, attributeDefinitions: List<AttributeDefinition>): Key? {
+    private fun getSortKeyFromMetadata(
+        sortKeyName: String?,
+        keys: Map<String, AttributeValue>,
+        attributeDefinitions: List<AttributeDefinition>
+    ): Key? {
         sortKeyName ?: return null
         val sortKeyAttributeValue = keys[sortKeyName]
         sortKeyAttributeValue ?: return null
@@ -331,7 +351,10 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             getSortKeyFromMetadata(tableMetadata.sortKey, keys, tableMetadata.attributeDefinitions)
     }
 
-    private fun getAttributesFromReturnValues(returnValues: ReturnValue?, request: DBGetItemRequest): Map<String, AttributeValue>? =
+    private fun getAttributesFromReturnValues(
+        returnValues: ReturnValue?,
+        request: DBGetItemRequest
+    ): Map<String, AttributeValue>? =
         when (returnValues) {
             ReturnValue.ALL_OLD -> {
                 storage.getItem(request)?.associate {
@@ -342,7 +365,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             else -> throw DynamoDbException.builder().message("Return values set to invalid value").build()
         }
 
-    private fun checkNumOfKeys(tableName:String, keys: Map<String, AttributeValue>) {
+    private fun checkNumOfKeys(tableName: String, keys: Map<String, AttributeValue>) {
         val tableMetadata = tablesMetadata[tableName] ?: throw ResourceNotFoundException.builder()
             .message("Cannot do operations on a non-existent table").build()
         val actualSize = if (tableMetadata.sortKey != null) 2 else 1
@@ -352,5 +375,4 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                 .build()
         }
     }
-
 }
