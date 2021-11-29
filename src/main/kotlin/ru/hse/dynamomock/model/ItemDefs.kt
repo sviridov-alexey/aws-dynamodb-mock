@@ -39,16 +39,16 @@ data class AttributeInfo(
 
 @Serializable
 data class AttributeTypeInfo(
-    val s: String?,
-    val n: String?,
-    val b : String?,
-    val ss: List<String>?,
-    val ns: List<String>?,
-    val bs: List<String>?,
-    val m: Map<String, AttributeTypeInfo>?,
-    val l: List<AttributeTypeInfo>?,
-    val bool: Boolean?,
-    val nul: Boolean?
+    val s: String? = null,
+    val n: String? = null,
+    val b : String? = null,
+    val ss: List<String>? = null,
+    val ns: List<String>? = null,
+    val bs: List<String>? = null,
+    val m: Map<String, AttributeTypeInfo>? = null,
+    val l: List<AttributeTypeInfo>? = null,
+    val bool: Boolean? = null,
+    val nul: Boolean? = null
 
 )
 

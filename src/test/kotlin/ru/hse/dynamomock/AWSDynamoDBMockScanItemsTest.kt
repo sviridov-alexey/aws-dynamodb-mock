@@ -159,4 +159,54 @@ internal class AWSDynamoDBMockScanItemsTest : AWSDynamoDBMockTest() {
         )
         assertEquals(item, response.item())
     }
+
+    @Test
+    fun `scan l item`() {
+        val tableName = "testTable"
+        val attributeDefinitions = listOf<AttributeDefinition>(
+            AttributeDefinition.builder()
+                .attributeName("column1")
+                .attributeType("S")
+                .build()
+        )
+        val createTableRequest = CreateTableRequest.builder()
+            .tableName(tableName)
+            .attributeDefinitions(attributeDefinitions)
+            .keySchema(
+                listOf(
+                    KeySchemaElement.builder()
+                        .attributeName("column1")
+                        .keyType("HASH")
+                        .build()
+                )
+            )
+            .build()
+        mock.createTable(createTableRequest)
+
+        mock.scanItemsFromCSV(filesLocation + "l-m-types.csv", tableName)
+
+        val item = mapOf(
+            "column1" to AttributeValue.builder().s("something").build(),
+            "column2" to AttributeValue.builder()
+                .l(
+                    listOf(
+                        AttributeValue.builder().s("Cookies").build(),
+                        AttributeValue.builder().s("Coffee").build(),
+                        AttributeValue.builder().n("3.14159").build()
+                    )
+                )
+                .build()
+        )
+
+        val response = mock.getItem(
+            GetItemRequest.builder()
+                .tableName(tableName)
+                .attributesToGet(item.keys)
+                .key(item.filter { it.key == "column1" })
+                .build()
+        )
+        assertEquals(item, response.item())
+
+    }
+
 }

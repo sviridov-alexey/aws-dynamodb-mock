@@ -1,4 +1,4 @@
-column1|S,column2|N,column3|S,column4|BOOL, column5|NULL
-homecoming,1,2017-07-06,true,false
-far from home,2,2019-07-04,false,true
-no way home,3,2021-12-15,true,false
+column1|S;column2|N;column3|S;column4|BOOL; column5|NULL
+homecoming;1;2017-07-06;true;false
+far from home;2;2019-07-04;false;true
+no way home;3;2021-12-15;true;false

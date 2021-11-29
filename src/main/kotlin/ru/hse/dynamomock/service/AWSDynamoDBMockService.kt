@@ -1,5 +1,7 @@
 package ru.hse.dynamomock.service
 
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import ru.hse.dynamomock.exception.AWSMockCSVException
 import ru.hse.dynamomock.db.DataStorageLayer
 import ru.hse.dynamomock.model.*
@@ -9,8 +11,6 @@ import software.amazon.awssdk.services.dynamodb.model.*
 import java.io.File
 import java.util.Base64
 import java.util.EnumSet
-
-
 
 class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     private val tablesMetadata = mutableMapOf<String, TableMetadata>()
@@ -223,12 +223,12 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     }
 
     fun scanItems(fileName: String, tableName: String) {
-        val allowedTypes = EnumSet.of(SS, S, N, NS, BOOL, NULL)
+        val allowedTypes = EnumSet.of(SS, S, N, NS, L, BOOL, NULL)
         val columnsInfo = mutableListOf<Pair<String, String>>()
 
         File(fileName).useLines { line ->
             val firstRow = line.firstOrNull() ?: throw AWSMockCSVException("The file is empty")
-            val info = firstRow.split(",")
+            val info = firstRow.split(";")
             info.forEach {
                 val value = it.split("|")
                 if (value.size != 2) {
@@ -248,7 +248,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         val itemsList = mutableListOf<Map<String, AttributeValue>>()
         File(fileName).forEachLine {
             if (i != 0) {
-                val columnValues = it.split(",")
+                val columnValues = it.split(";")
                 if (columnValues.size != columnsInfo.size) {
                     throw AWSMockCSVException("${i+1} row's size doesn't match the size of first row")
                 }
@@ -271,6 +271,11 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                         }
                         BOOL -> {
                             AttributeValue.builder().bool(element == "true").build()
+                        }
+                        L -> {
+                            val attributeValues = element.split(",")
+                            AttributeValue.builder()
+                                .l(attributeValues.map { value -> toAttributeValue(Json.decodeFromString(value)) }).build()
                         }
                         else -> throw AWSMockCSVException("Function scanItems supports only S, N, NS, SS, NULL, BOOL types right now")
                     }
