@@ -55,7 +55,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         require(request.indexName() == null) {
             "Indexes are not supported in query yet."
         }
-        require(request.consistentRead()) {
+        require(request.consistentRead() != false) {
             "Non-consistent read is not supported in query yet."
         }
         val tableName = request.tableName()
@@ -66,20 +66,18 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
         val keyConditions = request.retrieveKeyConditions()
         val items = storage.query(tableName, keyConditions).let {
-            if (request.scanIndexForward()) it else it.reversed()
+            if (request.scanIndexForward() != false) it else it.reversed()
         }.map { item ->
-            item.associate { it.name to it.type.toAttributeValue() }.toMutableMap().apply {
-                remove(table.partitionKey)
-                remove(table.sortKey)
-            }.toMap()
+            item.associate { it.name to it.type.toAttributeValue() }
         }
 
         val filterExpression = request.retrieveFilterExpression()
-        val filteredItems = filterExpression?.let { items.filter { filterExpression.evaluate(it) } } ?: items
-
-        require(!request.hasAttributesToGet() || request.select() == null || request.select() == Select.SPECIFIC_ATTRIBUTES) {
-            "Incorrect usage of attributes to get and select."
-        }
+        val filteredItems = filterExpression?.let { items.map {
+            it.toMutableMap().apply {
+                remove(table.partitionKey)
+                remove(table.sortKey)
+            }
+        }.filter { filterExpression.evaluate(it) } } ?: items
 
         val responseBuilder = QueryResponse.builder()
             .count(filteredItems.size)

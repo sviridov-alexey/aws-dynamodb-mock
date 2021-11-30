@@ -5,6 +5,7 @@ import ru.hse.dynamomock.model.query.grammar.ConditionExpressionGrammar
 import ru.hse.dynamomock.model.query.ConditionExpression.Parameter
 import ru.hse.dynamomock.model.toAttributeTypeInfo
 import software.amazon.awssdk.services.dynamodb.model.*
+import java.math.BigDecimal
 
 // TODO support B and BS in some methods
 sealed interface ConditionExpression {
@@ -91,7 +92,7 @@ sealed interface ConditionExpression {
 
         final override fun compare(left: AttributeTypeInfo, right: AttributeTypeInfo) = when (left.typeAsString) {
             "S" -> compare(left.value as String, right.value as String)
-            "N" -> compare((left.value as String).toBigDecimal(), (right.value as String).toBigDecimal())
+            "N" -> compare(left.value as BigDecimal, right.value as BigDecimal)
             "B" -> TODO()
             else -> false
         }
@@ -332,7 +333,7 @@ private fun ConditionExpression.toKeyCondition(): Pair<String, Condition> = when
                 .message("Comparison in key condition expression must contain exactly on value.").build()
 
         attribute.name to Condition.builder()
-            .comparisonOperator(this::class.simpleName!!)
+            .comparisonOperator(this::class.simpleName!!.uppercase())
             .attributeValueList(valueParameter.value)
             .build()
     }
