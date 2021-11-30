@@ -81,10 +81,10 @@ data class AttributeTypeInfo(
         .nul(nul)
         .build()
 
-    fun requireExactlyOneValue() {
+    private fun requireExactlyOneValue() {
         if (notNullProperties.size != 1) {
             throw DynamoDbException.builder().message(
-                "Supplied AttributeValue has more than one datatypes set, must contain exactly one of the supported datatypes"
+                "Supplied AttributeValue has more than one types set, must contain exactly one of the supported types"
             ).build()
         }
     }
@@ -98,7 +98,9 @@ data class AttributeTypeInfo(
     val value
         get(): Any {
             requireExactlyOneValue()
-            return notNullProperties.single().second
+            return notNullProperties.single().second.let {
+                if (typeAsString == "N") (it as String).toBigDecimal() else it
+            }
         }
 }
 

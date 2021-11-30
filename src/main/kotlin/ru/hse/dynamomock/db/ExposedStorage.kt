@@ -7,7 +7,9 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import ru.hse.dynamomock.model.*
 import ru.hse.dynamomock.model.Key
+import software.amazon.awssdk.services.dynamodb.model.ComparisonOperator
 import software.amazon.awssdk.services.dynamodb.model.Condition
+import software.amazon.awssdk.services.dynamodb.model.DynamoDbException
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException
 import java.security.MessageDigest
 import java.util.*
@@ -35,7 +37,39 @@ class ExposedStorage : DataStorageLayer {
     }
 
     override fun query(tableName: String, keyConditions: Map<String, Condition>): List<List<AttributeInfo>> {
-        TODO()
+        val table = getTable(tableName)
+        keyConditions[table.partitionKeyName].let {
+            if (it == null || it.comparisonOperator() != ComparisonOperator.EQ) {
+                throw DynamoDbException.builder().message("Partition key must use '=' operator.").build()
+            }
+        }
+        if (keyConditions.size > 2 || keyConditions.size == 2 && table.sortKeyName !in keyConditions) {
+            throw DynamoDbException.builder() // TODO not forget to add indexes
+                .message("Only partition and sort keys can be used in key conditions.")
+                .build()
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        val keys = keyConditions.map { (name, cond) ->
+            val strs = listOf(
+                table.partitionKeyName to table.stringPartitionKey, table.sortKeyName to table.stringSortKey
+            ).filter { it.first == name }.map { it.second }
+            val nums = listOf(
+                table.partitionKeyName to table.numPartitionKey, table.sortKeyName to table.numSortKey
+            ).filter { it.first == name }.map { it.second }
+
+            strs.firstNotNullOfOrNull { cond.toOp(it) }
+                ?: nums.firstNotNullOfOrNull { cond.toOp(it) }
+                ?: throw DynamoDbException.builder().message("Invalid key condition with ${name}.").build()
+        }
+
+        val condition: SqlExpressionBuilder.() -> Op<Boolean> = {
+            keys.map { it() }.reduce { a, b -> a and b }
+        }
+
+        return transaction {
+            table.select(condition).map { Json.decodeFromString(it[table.attributes]) }
+        }
     }
 
     private fun createKeyCondition(
@@ -125,10 +159,56 @@ class ExposedStorage : DataStorageLayer {
         val numSortKey = decimal("numSortKey", 20, 0).nullable().default(null)
 
         override val primaryKey: PrimaryKey = PrimaryKey(id)
+
+        val partitionKeyName = metadata.partitionKey
+        val sortKeyName = metadata.sortKey
+    }
+}
+
+private fun hashTableName(name: String): String =
+    MessageDigest.getInstance("MD5").digest(name.toByteArray()).contentToString()
+
+private inline fun <reified T : Comparable<T>> Condition.toOp(
+    column: Column<T?>
+): (SqlExpressionBuilder.() -> Op<Boolean>)? {
+    val args = attributeValueList().map { it.toAttributeTypeInfo().value }.filterIsInstance<T>()
+    if (args.size != attributeValueList().size) {
+        return null
     }
 
-    companion object {
-        private fun hashTableName(name: String): String =
-            MessageDigest.getInstance("MD5").digest(name.toByteArray()).contentToString()
+    val assertArgs = { size: Int ->
+        if (args.size != size) {
+            throw DynamoDbException.builder().message("Incorrect number of arguments in a key condition.").build()
+        }
+    }
+
+    if (comparisonOperator() == ComparisonOperator.BETWEEN) {
+        assertArgs(2)
+        return { column.between(args[0], args[1]) }
+    }
+
+    if (comparisonOperator() == ComparisonOperator.BEGINS_WITH) {
+        assertArgs(1)
+        if (T::class != String::class) {
+            return null
+        }
+        val arg = args.first() as String
+        return {
+            @Suppress("UNCHECKED_CAST") // it is checked above :)
+            (column as Column<String>).like(arg)
+        }
+    }
+
+    assertArgs(1)
+    val arg = args.first()
+    return {
+        when (comparisonOperator()) {
+            ComparisonOperator.EQ -> column eq arg
+            ComparisonOperator.LE -> column lessEq arg
+            ComparisonOperator.LT -> column less arg
+            ComparisonOperator.GE -> column greaterEq arg
+            ComparisonOperator.GT -> column greater arg
+            else -> throw IllegalStateException()
+        }
     }
 }
