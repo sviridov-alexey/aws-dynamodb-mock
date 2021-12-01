@@ -72,12 +72,15 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         }
 
         val filterExpression = request.retrieveFilterExpression()
-        val filteredItems = filterExpression?.let { items.map {
-            it.toMutableMap().apply {
-                remove(table.partitionKey)
-                remove(table.sortKey)
+        val filteredItems = filterExpression?.let {
+            items.filter {
+                val withoutKeys = it.toMutableMap().apply {
+                    remove(table.partitionKey)
+                    remove(table.sortKey)
+                }
+                filterExpression.evaluate(withoutKeys)
             }
-        }.filter { filterExpression.evaluate(it) } } ?: items
+        } ?: items
 
         val responseBuilder = QueryResponse.builder()
             .count(filteredItems.size)

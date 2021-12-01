@@ -139,6 +139,14 @@ sealed interface ConditionExpression {
         val attr: Parameter,
         val list: List<Parameter>
     ) : ConditionExpression {
+        init {
+            if (list.size > 100) {
+                throw DynamoDbException.builder()
+                    .message("List in `in` operator must contain up to 100 values.")
+                    .build()
+            }
+        }
+
         override fun evaluate(attributeValues: Map<String, AttributeValue>) =
             list.any { Eq(attr, it).evaluate(attributeValues) }
     }
