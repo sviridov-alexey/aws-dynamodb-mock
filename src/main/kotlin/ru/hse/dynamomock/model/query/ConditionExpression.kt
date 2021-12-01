@@ -330,7 +330,7 @@ private fun ConditionExpression.toKeyCondition(): Pair<String, Condition> = when
         val valueParameter = leftParam as? Parameter.Value
             ?: rightParam as? Parameter.Value
             ?: throw DynamoDbException.builder()
-                .message("Comparison in key condition expression must contain exactly on value.").build()
+                .message("Comparison in key condition expression must contain exactly one value.").build()
 
         attribute.name to Condition.builder()
             .comparisonOperator(this::class.simpleName!!.uppercase())

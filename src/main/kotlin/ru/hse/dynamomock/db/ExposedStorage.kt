@@ -195,7 +195,7 @@ private inline fun <reified T : Comparable<T>> Condition.toOp(
         val arg = args.first() as String
         return {
             @Suppress("UNCHECKED_CAST") // it is checked above :)
-            (column as Column<String>).like(arg)
+            (column as Column<String>).like("$arg%")
         }
     }
 
