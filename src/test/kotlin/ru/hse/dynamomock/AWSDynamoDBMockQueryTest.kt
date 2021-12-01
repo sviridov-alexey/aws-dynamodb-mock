@@ -188,6 +188,111 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
         )
         expected = Expected(items = listOf(items[0], items[1]), scannedCount = 2)
     }
+
+    @Test
+    fun `test between with sort key`() = test {
+        partKeyType = AttributeType.N
+        sortKeyType = AttributeType.S
+        items = listOf(
+            mapOf(partKey to atN("2"), sortKey to atS("bcd: wow!!!!")),
+            mapOf(partKey to atN("2"), sortKey to atS("be, be, be")),
+            mapOf(partKey to atN("2"), sortKey to atS("d, e, f, j")),
+            mapOf(partKey to atN("2"), sortKey to atS("abc def"))
+        )
+        query = query(
+            tableName = tableName,
+            keyConditions = mapOf(
+                partKey to condition(listOf(atN("2")), EQ),
+                sortKey to condition(listOf(atS("bark"), atS("carlson")), BETWEEN)
+            )
+        )
+        expected = Expected(items = listOf(items[0], items[1]), scannedCount = 2)
+    }
+
+    @Test
+    fun `test filter expression comparisons`() = test(autoRun = false) {
+        partKeyType = AttributeType.S
+        items = listOf(
+            mapOf(partKey to atS("wow"), "first" to atN("1234"), "second" to atN("1000")),
+            mapOf(partKey to atS("wow"), "first" to atN("4321"), "second" to atN("1")),
+            mapOf(partKey to atS("wow"), "first" to atN("1500"), "third" to atN("2"))
+        )
+        val keyConditionExpression = "$partKey = :val"
+        val values = mapOf(":val" to atS("wow"), ":one" to atN("1000"), ":two" to atN("2000"))
+
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = keyConditionExpression,
+            filterExpression = "first <= :two and second >= :one",
+            expressionAttributeValues = values
+        )
+        expected = Expected(items = listOf(items[0]), scannedCount = 3)
+        test()
+
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = keyConditionExpression,
+            filterExpression = "first <= :two or second <= :one",
+            expressionAttributeValues = values
+        )
+        expected = Expected(items = items, scannedCount = 3)
+        test()
+
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = keyConditionExpression,
+            filterExpression = "first = :two or third <> :one",
+            expressionAttributeValues = values
+        )
+        expected = Expected(items = listOf(items[2]), scannedCount = 3)
+        test()
+
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = keyConditionExpression,
+            filterExpression = "first between second and :two and not third = :one",
+            expressionAttributeValues = values
+        )
+        expected = Expected(items = listOf(items[0]), scannedCount = 3)
+        test()
+    }
+
+    @Test
+    fun `test filter expression begins with`() = test {
+        partKeyType = AttributeType.S
+        items = listOf(
+            mapOf(partKey to atS("a"), "kek" to atS("hello")),
+            mapOf(partKey to atS("a"), "kek" to atS("hell!!")),
+            mapOf(partKey to atS("a"), "kek" to atS("hypothesis")),
+            mapOf(partKey to atS("b"), "kek" to atS("hello")),
+            mapOf(partKey to atS("a"))
+        )
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = "$partKey = :val",
+            filterExpression = "begins_with (kek, :start)",
+            expressionAttributeValues = mapOf(":val" to atS("a"), ":start" to atS("hell"))
+        )
+        expected = Expected(items = listOf(items[0], items[1]), scannedCount = 4)
+    }
+
+    @Test
+    fun `test filter expression in`() = test {
+        partKeyType = AttributeType.S
+        items = listOf(
+            mapOf(partKey to atS("part"), "wow" to atS("1")),
+            mapOf(partKey to atS("part"), "wow" to atS("2")),
+            mapOf(partKey to atS("part"), "wow" to atN("1")) // It is number!
+        )
+        val values = mapOf(":one" to atS("1"), ":another" to atS("3"), ":num" to atN("10"), ":v" to atS("part"))
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = "$partKey = :v",
+            filterExpression = "wow in (:one, :v, :another, :num)",
+            expressionAttributeValues = values
+        )
+        expected = Expected(items = listOf(items[0]), scannedCount = 3)
+    }
 }
 
 private fun ComparisonOperator.toSign() = when (this) {
