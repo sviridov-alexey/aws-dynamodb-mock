@@ -95,11 +95,15 @@ data class AttributeTypeInfo(
             return notNullProperties.single().first
         }
 
+    @Suppress("UNCHECKED_CAST")
     val value
         get(): Any {
             requireExactlyOneValue()
-            return notNullProperties.single().second.let {
-                if (typeAsString == "N") (it as String).toBigDecimal() else it
+            val rawValue = notNullProperties.single().second
+            return when (notNullProperties.single().first) {
+                "N" -> (rawValue as String).toBigDecimal()
+                "NS" -> (rawValue as List<String>).map { it.toBigDecimal() }
+                else -> rawValue
             }
         }
 }

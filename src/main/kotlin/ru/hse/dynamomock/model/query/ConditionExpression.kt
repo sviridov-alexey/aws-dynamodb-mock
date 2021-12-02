@@ -25,6 +25,8 @@ sealed interface ConditionExpression {
                     attributeValue.s() != null -> attributeValue.s().length
                     attributeValue.b() != null -> attributeValue.b().asByteArray().size // TODO ???
                     attributeValue.hasSs() -> attributeValue.ss().size
+                    attributeValue.hasNs() -> attributeValue.ns().size
+                    attributeValue.hasBs() -> attributeValue.bs().size
                     attributeValue.hasL() -> attributeValue.l().size
                     attributeValue.hasM() -> attributeValue.m().size
                     else -> null
@@ -90,11 +92,16 @@ sealed interface ConditionExpression {
     abstract class ComparisonWithComparable : Comparison() {
         abstract fun <T : Comparable<T>> compare(left: T, right: T): Boolean
 
-        final override fun compare(left: AttributeTypeInfo, right: AttributeTypeInfo) = when (left.typeAsString) {
-            "S" -> compare(left.value as String, right.value as String)
-            "N" -> compare(left.value as BigDecimal, right.value as BigDecimal)
-            "B" -> TODO()
-            else -> false
+        final override fun compare(left: AttributeTypeInfo, right: AttributeTypeInfo): Boolean {
+            if (left.typeAsString != right.typeAsString) {
+                return false
+            }
+            return when (left.typeAsString) {
+                "S" -> compare(left.value as String, right.value as String)
+                "N" -> compare(left.value as BigDecimal, right.value as BigDecimal)
+                "B" -> TODO()
+                else -> false
+            }
         }
     }
 
@@ -189,12 +196,19 @@ sealed interface ConditionExpression {
         override fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean {
             val attrTypeInfo = attr.retrieve(attributeValues)?.toAttributeTypeInfo() ?: return false
             val operandTypeInfo = operand.retrieve(attributeValues)?.toAttributeTypeInfo() ?: return false
-            return when (attrTypeInfo.typeAsString) {
-                "S" -> {
+            val type = attrTypeInfo.typeAsString
+            return when {
+                type == "S" -> {
                     require(operandTypeInfo.typeAsString == "S")
                     (attrTypeInfo.value as String).contains(operandTypeInfo.value as String)
                 }
-                "SS" -> (attrTypeInfo.value as List<*>).contains(operandTypeInfo.value)
+                type.length == 2 && type.endsWith('S') -> {
+                    if (type.first().toString() == operandTypeInfo.typeAsString) {
+                        (attrTypeInfo.value as List<*>).contains(operandTypeInfo.value)
+                    } else {
+                        false
+                    }
+                }
                 else -> throw IllegalArgumentException() // TODO
             }
         }
