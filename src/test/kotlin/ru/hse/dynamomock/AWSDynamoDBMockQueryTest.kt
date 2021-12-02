@@ -2,8 +2,11 @@ package ru.hse.dynamomock
 
 import org.junit.jupiter.api.Test
 import ru.hse.dynamomock.model.TableMetadata
+import ru.hse.dynamomock.model.query.grammar.*
 import ru.hse.dynamomock.model.query.grammar.atN
+import ru.hse.dynamomock.model.query.grammar.atNS
 import ru.hse.dynamomock.model.query.grammar.atS
+import ru.hse.dynamomock.model.query.grammar.atSS
 import software.amazon.awssdk.services.dynamodb.model.*
 import software.amazon.awssdk.services.dynamodb.model.ComparisonOperator.*
 import java.time.Instant
@@ -282,7 +285,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
         items = listOf(
             mapOf(partKey to atS("part"), "wow" to atS("1")),
             mapOf(partKey to atS("part"), "wow" to atS("2")),
-            mapOf(partKey to atS("part"), "wow" to atN("1")) // It is number!
+            mapOf(partKey to atS("part"), "wow" to atN("1")) // It is a number!
         )
         val values = mapOf(":one" to atS("1"), ":another" to atS("3"), ":num" to atN("10"), ":v" to atS("part"))
         query = query(
@@ -292,6 +295,142 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             expressionAttributeValues = values
         )
         expected = Expected(items = listOf(items[0]), scannedCount = 3)
+    }
+
+    @Test
+    fun `test filter expression attributes`() = test(autoRun = false) {
+        partKeyType = AttributeType.S
+        items = listOf(
+            mapOf(partKey to atS("123"), "a" to atN("1"), "b" to atS("ww")),
+            mapOf(partKey to atS("123"), "a" to atS("100"), "b" to atN("13")),
+            mapOf(partKey to atS("123"), "b" to atS("-1")),
+            mapOf(partKey to atS("124"), "a" to atN("1"), "b" to atS("ww"))
+        )
+        val values = mapOf(":v" to atS("123"), ":s" to atS("S"))
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = "$partKey = :v",
+            filterExpression = "attribute_exists (a)",
+            expressionAttributeValues = values
+        )
+        expected = Expected(items = listOf(items[0], items[1]), scannedCount = 3)
+        test()
+
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = "$partKey = :v",
+            filterExpression = "attribute_not_exists(a)",
+            expressionAttributeValues = values
+        )
+        expected = Expected(items = listOf(items[2]), scannedCount = 3)
+        test()
+
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = "$partKey = :v",
+            filterExpression = "attribute_type (b, :s)",
+            expressionAttributeValues = values
+        )
+        expected = Expected(items = listOf(items[0], items[2]), scannedCount = 3)
+        test()
+    }
+
+    @Test
+    fun `test filter expression contains in string and size`() = test(autoRun = false) {
+        partKeyType = AttributeType.S
+        items = listOf(
+            mapOf(partKey to atS("hello"), "kek" to atS("my dear friend!")),
+            mapOf(partKey to atS("hello"), "kek" to atS("friend, how are you?")),
+            mapOf(partKey to atS("hello"), "kek" to atS("I love fried chicken!")),
+            mapOf(partKey to atS("kek"), "kek" to atS("my dear friend!")),
+            mapOf(partKey to atS("hello"), "kek2" to atS("friend!"))
+        )
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = "$partKey = :v",
+            filterExpression = "contains (kek, :a)",
+            expressionAttributeValues = mapOf(":v" to atS("hello"), ":a" to atS("friend"))
+        )
+        expected = Expected(items = listOf(items[0], items[1]), scannedCount = 4)
+        test()
+
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = "$partKey = :v",
+            filterExpression = "size (kek) <= :len",
+            expressionAttributeValues = mapOf(":v" to atS("hello"), ":len" to atN("15"))
+        )
+        expected = Expected(items = listOf(items[0]), scannedCount = 4)
+        test()
+    }
+
+    @Test
+    fun `test filter expression contains in string set and size`() = test(autoRun = false) {
+        partKeyType = AttributeType.S
+        items = listOf(
+            mapOf(partKey to atS("hello"), "kek" to atSS("ab", "ac", "ad"), "val" to atS("ab")),
+            mapOf(partKey to atS("hello"), "kek" to atSS("ab", "ac", "ae", "a"), "val" to atS("ae")),
+            mapOf(partKey to atS("hello"), "kek" to atSS("ac", "ad"), "val" to atS("ab")),
+            mapOf(partKey to atS("kek"), "kek" to atSS("ba", "bc"), "val" to atS("bc")),
+            mapOf(partKey to atS("hello"), "kek2" to atSS("ab", "ac", "ad"), "val" to atS("ab"))
+        )
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = "$partKey = :v",
+            filterExpression = "contains (kek, val)",
+            expressionAttributeValues = mapOf(":v" to atS("hello"))
+        )
+        expected = Expected(items = listOf(items[0], items[1]), scannedCount = 4)
+        test()
+
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = "$partKey = :v",
+            filterExpression = "size (kek) <> :len",
+            expressionAttributeValues = mapOf(":v" to atS("hello"), ":len" to atN("4"))
+        )
+        expected = Expected(items = listOf(items[0], items[2]), scannedCount = 4)
+        test()
+    }
+
+    @Test
+    fun `test filter expression contains in num set`() = test {
+        partKeyType = AttributeType.S
+        items = listOf(
+            mapOf(partKey to atS("hello"), "kek" to atNS("1", "2", "3")),
+            mapOf(partKey to atS("hello"), "kek" to atNS("2", "3", "10")),
+            mapOf(partKey to atS("hello"), "kek" to atNS("10", "-1", "3")),
+            mapOf(partKey to atS("kek"), "kek" to atNS("10", "100", "2")),
+            mapOf(partKey to atS("hello"), "kek2" to atNS("1", "2", "3")),
+            mapOf(partKey to atS("hello"), "kek" to atSS("1", "2", "3")) // it is a string set!
+        )
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = "$partKey = :v",
+            filterExpression = "contains (kek, :value)",
+            expressionAttributeValues = mapOf(":v" to atS("hello"), ":value" to atN("2"))
+        )
+        expected = Expected(items = listOf(items[0], items[1]), scannedCount = 5)
+    }
+
+    @Test
+    fun `test filter expression size of lists and maps`() = test {
+        partKeyType = AttributeType.S
+        items = listOf(
+            mapOf(partKey to atS("hello"), "kek" to atM("a" to atS("a")), "len" to atN("1")),
+            mapOf(partKey to atS("hello"), "kek" to atL(atS("a"), atS("b")), "len" to atN("2")),
+            mapOf(partKey to atS("hello"), "kek" to atM("a" to atN("1"), "b" to atS("kek"))),
+            mapOf(partKey to atS("kek"), "kek" to atM("a" to atS("a")), "len" to atN("1")),
+            mapOf(partKey to atS("hello"), "kek2" to atL(atS("1"), atS("2")), "len" to atN("2")),
+            mapOf(partKey to atS("hello"), "kek" to atL(atS("2")), "len" to atN("2"))
+        )
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = "$partKey = :v",
+            filterExpression = "size (kek) = len",
+            expressionAttributeValues = mapOf(":v" to atS("hello"))
+        )
+        expected = Expected(items = listOf(items[0], items[1]), scannedCount = 5)
     }
 }
 
