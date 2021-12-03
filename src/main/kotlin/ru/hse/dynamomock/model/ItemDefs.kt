@@ -102,7 +102,9 @@ data class AttributeTypeInfo(
             val rawValue = notNullProperties.single().second
             return when (notNullProperties.single().first) {
                 "N" -> (rawValue as String).toBigDecimal()
-                "NS" -> (rawValue as List<String>).map { it.toBigDecimal() }
+                "NS" -> (rawValue as List<String>).map { it.toBigDecimal() }.toSet()
+                "BS" -> (rawValue as List<*>).toSet()
+                "SS" -> (rawValue as List<*>).toSet()
                 else -> rawValue
             }
         }

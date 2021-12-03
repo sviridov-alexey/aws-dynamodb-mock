@@ -209,7 +209,7 @@ sealed interface ConditionExpression {
                         false
                     }
                 }
-                else -> throw IllegalArgumentException() // TODO
+                else -> false
             }
         }
     }
@@ -217,7 +217,7 @@ sealed interface ConditionExpression {
 
 fun QueryRequest.retrieveFilterExpression(): ConditionExpression? {
     return if (hasQueryFilter()) {
-        retrieveConditionExpression(queryFilter(), conditionalOperator())
+        retrieveConditionExpression(queryFilter(), conditionalOperator() ?: ConditionalOperator.AND)
     } else if (filterExpression() != null) {
         val filterExpression = filterExpression()
         ConditionExpressionGrammar(expressionAttributeNames(), expressionAttributeValues()).parse(filterExpression)

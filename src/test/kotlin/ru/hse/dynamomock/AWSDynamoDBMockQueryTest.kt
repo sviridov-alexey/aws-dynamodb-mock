@@ -73,6 +73,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
         keyConditions: Map<String, Condition>? = null,
         keyConditionExpression: String? = null,
         queryFilter: Map<String, Condition>? = null,
+        conditionalOperator: ConditionalOperator? = null,
         filterExpression: String? = null,
         projectionExpression: String? = null,
         attributesToGet: List<String>? = null,
@@ -88,6 +89,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
         keyConditions?.let { builder.keyConditions(it) }
         keyConditionExpression?.let { builder.keyConditionExpression(it) }
         queryFilter?.let { builder.queryFilter(it) }
+        conditionalOperator?.let { builder.conditionalOperator(it) }
         filterExpression?.let { builder.filterExpression(it) }
         projectionExpression?.let { builder.projectionExpression(it) }
         attributesToGet?.let { builder.attributesToGet(it) }
@@ -431,6 +433,139 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             expressionAttributeValues = mapOf(":v" to atS("hello"))
         )
         expected = Expected(items = listOf(items[0], items[1]), scannedCount = 5)
+    }
+
+    @Test
+    fun `test simple query filter`() = test(autoRun = false) {
+        partKeyType = AttributeType.N
+        items = listOf(
+            mapOf(
+                partKey to atN("-10"),
+                "one" to atS("what"),
+                "list" to atSS("one", "two"),
+                "val" to atN("73")
+            ),
+            mapOf(
+                partKey to atN("-10"),
+                "one1" to atN("10"),
+                "list" to atSS("two", "three"),
+                "val" to atN("37")
+            )
+        )
+        query = query(
+            tableName = tableName,
+            keyConditions = mapOf(partKey to condition(listOf(atN("-10")), EQ)),
+            queryFilter = mapOf("one" to condition(listOf(), NOT_NULL))
+        )
+        expected = Expected(items = listOf(items[0]), scannedCount = 2)
+        test()
+
+        query = query(
+            tableName = tableName,
+            keyConditions = mapOf(partKey to condition(listOf(atN("-10")), EQ)),
+            queryFilter = mapOf("one" to condition(listOf(), NOT_NULL), "one1" to condition(listOf(), NOT_NULL)),
+            conditionalOperator = ConditionalOperator.OR
+        )
+        expected = Expected(items = listOf(items[0], items[1]), scannedCount = 2)
+        test()
+
+        query = query(
+            tableName = tableName,
+            keyConditions = mapOf(partKey to condition(listOf(atN("-10")), EQ)),
+            queryFilter = mapOf("one" to condition(listOf(), NOT_NULL), "one1" to condition(listOf(), NOT_NULL))
+        )
+        expected = Expected(items = listOf(), scannedCount = 2)
+        test()
+
+        query = query(
+            tableName = tableName,
+            keyConditions = mapOf(partKey to condition(listOf(atN("-10")), EQ)),
+            queryFilter = mapOf("list" to condition(listOf(atS("two")), CONTAINS))
+        )
+        expected = Expected(items = listOf(items[0], items[1]), scannedCount = 2)
+        test()
+
+        query = query(
+            tableName = tableName,
+            keyConditions = mapOf(partKey to condition(listOf(atN("-10")), EQ)),
+            queryFilter = mapOf("val" to condition(listOf(atN("50")), LT))
+        )
+        expected = Expected(items = listOf(items[1]), scannedCount = 2)
+        test()
+    }
+
+    @Test
+    fun `test filter expression complex`() = test {
+        partKeyType = AttributeType.S
+        items = listOf(
+            mapOf(partKey to atS("seven"), "one" to atN("10"), "two" to atS("seven")),
+            mapOf(partKey to atS("seven"), "list" to atL(atN("10"), atS("-10"), atSS("kek"))),
+            mapOf(partKey to atS("seven"), "set" to atNS("2", "1")),
+            mapOf(partKey to atS("seven"), "list" to atL(atS("10"), atN("-10"), atSS("kek"))),
+            mapOf(partKey to atS("seven"), "set" to atNS("1", "2", "3")),
+            mapOf(partKey to atS("seven"), "set" to atSS("1", "2")),
+            mapOf(partKey to atS("seven"), "one" to atN("5"), "two" to atS("seven")),
+            mapOf(partKey to atS("seven"), "one" to atN("10"), "two" to atS("Seven")),
+            mapOf(partKey to atS("Seven"), "one" to atN("10"), "two" to atS("seven"))
+        )
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = "$partKey = :v",
+            filterExpression = ":v in (one, two, :t, not_) and :a between :b and one or not not :c <> list or :s = set",
+            expressionAttributeValues = mapOf(
+                ":v" to atS("seven"),
+                ":t" to atN("10000000"),
+                ":a" to atN("7"),
+                ":b" to atN("-7"),
+                ":s" to atNS("1", "2"),
+                ":c" to atL(atS("10"), atN("-10"), atSS("kek"))
+            )
+        )
+        expected = Expected(items = listOf(items[0], items[1], items[2]), scannedCount = 8)
+    }
+
+    @Test
+    fun `test filter expression nested attributes`() = test(autoRun = false) {
+        partKeyType = AttributeType.N
+        items = listOf(mapOf(
+            partKey to atN("1"),
+            "map" to atM(
+                "one" to atL(atL(atS("10"), atN("-2"))),
+                "hello" to atL(atN("-2"), atL(atS("hi"), atS("no"))),
+                "other" to atL(atN("-2"), atM("nested" to atL(atS("no"))))
+            )
+        ))
+        val keyConditionExpression = "$partKey = :v"
+        val values = mapOf(
+            ":v" to atN("1"), ":hi" to atS("hi"),
+            ":no" to atS("no"), ":ten" to atS("10"),
+            ":two" to atN("-2"), ":list" to atL(atS("hi"), atS("no"))
+        )
+
+        fun test(filterExpression: String, expectedItems: List<Map<String, AttributeValue>>) {
+            query = query(
+                tableName = tableName,
+                keyConditionExpression = keyConditionExpression,
+                filterExpression = filterExpression,
+                expressionAttributeValues = values
+            )
+            expected = Expected(items = expectedItems, scannedCount = 1)
+            test()
+        }
+        fun testSuccess(filterExpression: String) = test(filterExpression, items)
+        fun testFail(filterExpression: String) = test(filterExpression, listOf())
+
+        testSuccess("map.one[0][0] = :ten")
+        testSuccess("map.one[0][1] = :two")
+        testSuccess("map.hello[1][0] = :hi")
+        testSuccess("map.other[1].nested[0] = :no")
+        testSuccess("map.other[0] = :two")
+        testSuccess("map.hello[1] = :list")
+
+        testFail("map.one[10] = :ten")
+        testFail("map.other[0].nested = :two")
+        testFail("hello = :ten")
+        testFail("map.hello[1] = :hi")
     }
 }
 
