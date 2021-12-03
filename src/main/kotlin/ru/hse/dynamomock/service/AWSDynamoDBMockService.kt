@@ -271,22 +271,15 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                             AttributeValue.builder().bool(element == "true").build()
                         }
                         L -> {
-                            val attributeValues = element.split(",").map { v -> v.trim() }
+                            val attributeValues = Json.decodeFromString<List<AttributeTypeInfo>>(element)
                             AttributeValue.builder()
-                                .l(attributeValues.map { value -> toAttributeValue(Json.decodeFromString(value)) })
+                                .l(attributeValues.map { v -> toAttributeValue(v) })
                                 .build()
                         }
                         M -> {
-                            val attributeValues = element.split(",").map { v -> v.trim() }
+                            val attributeValues = Json.decodeFromString<Map<String, AttributeTypeInfo>>(element)
                             AttributeValue.builder().m(
-                                attributeValues.associate { mapValue ->
-                                    val nameAndValue = mapValue.split(":", limit = 2).map { v -> v.trim() }
-                                    nameAndValue[0].substring(1, nameAndValue[0].length - 1) to toAttributeValue(
-                                        Json.decodeFromString(
-                                            nameAndValue[1]
-                                        )
-                                    )
-                                }
+                                attributeValues.map { v -> v.key to toAttributeValue(v.value) }.toMap()
                             ).build()
                         }
                         else -> throw AWSMockCSVException("Function scanItems supports only S, N, NS, SS, NULL, BOOL types right now")
