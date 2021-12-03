@@ -329,8 +329,6 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         attributeDefinitions: List<AttributeDefinition>
     ): Key? {
         sortKeyName ?: return null
-        val sortKeyAttributeValue = keys[sortKeyName]
-        sortKeyAttributeValue ?: return null
 
         return getKeyFromMetadata(sortKeyName, keys, attributeDefinitions)
     }
