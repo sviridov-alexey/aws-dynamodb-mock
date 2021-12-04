@@ -9,7 +9,8 @@ data class TableMetadata(
     val partitionKey: String,
     val sortKey: String?,
     val tableStatus: TableStatus,
-    val creationDateTime: Instant = Instant.now()
+    val localSecondaryIndexes: List<LocalSecondaryIndex>?,
+    val creationDateTime: Instant = Instant.now(),
 ) {
     // TODO supports other parameters
     fun toTableDescription(): TableDescription = TableDescription.builder()
@@ -20,6 +21,7 @@ data class TableMetadata(
             sortKey?.let { nameToKeySchemaElement(it, KeyType.RANGE) }
         ))
         .tableStatus(tableStatus)
+        .localSecondaryIndexes(localSecondaryIndexes?.map { toLSIndexDescription(it) })
         .creationDateTime(creationDateTime)
         .build()
 }
@@ -29,7 +31,8 @@ fun CreateTableRequest.toTableMetadata(): TableMetadata = TableMetadata(
     attributeDefinitions(),
     getPartitionKey(keySchema()),
     getSortKey(keySchema()),
-    TableStatus.ACTIVE
+    TableStatus.ACTIVE,
+    localSecondaryIndexes()
 )
 
 private val KeySchemaElement.isPartition get(): Boolean = keyType() == KeyType.HASH
@@ -43,3 +46,11 @@ private fun getSortKey(keySchema: List<KeySchemaElement>) =
 
 private fun nameToKeySchemaElement(name: String, keyType: KeyType) =
     KeySchemaElement.builder().attributeName(name).keyType(keyType).build()
+
+private fun toLSIndexDescription(index: LocalSecondaryIndex) =
+    LocalSecondaryIndexDescription.builder()
+        .indexName(index.indexName())
+        .keySchema(index.keySchema())
+        .projection(index.projection())
+        // TODO: more parameters
+    .build()

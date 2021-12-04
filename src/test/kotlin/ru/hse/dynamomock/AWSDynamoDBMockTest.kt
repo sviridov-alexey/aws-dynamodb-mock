@@ -88,7 +88,8 @@ internal open class AWSDynamoDBMockTest {
             name: String,
             partitionKeyIndex: Int,
             sortKeyIndex: Int?,
-            creationDateTime: Instant
+            creationDateTime: Instant,
+            localSecondaryIndex: List<LocalSecondaryIndex>? = null
         ) = TableMetadata(
             name,
             listOfNotNull(
@@ -98,6 +99,7 @@ internal open class AWSDynamoDBMockTest {
             attributeDefinitionPool[partitionKeyIndex].attributeName(),
             sortKeyIndex?.let { attributeDefinitionPool[it].attributeName() },
             TableStatus.ACTIVE,
+            localSecondaryIndex,
             creationDateTime
         )
 

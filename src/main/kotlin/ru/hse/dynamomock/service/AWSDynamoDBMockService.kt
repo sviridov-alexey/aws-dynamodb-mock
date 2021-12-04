@@ -53,6 +53,32 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         require(request.tableName() !in tablesMetadata) {
             "Table ${request.tableName()} already exists. Cannot create."
         }
+        if (request.localSecondaryIndexes().size > 5) {
+            throw DynamoDbException.builder()
+                .message("Cannot have more than 5 local secondary indexes per table")
+                .build()
+        }
+        request.localSecondaryIndexes().forEach { index ->
+            val name = index.indexName()
+            if (name == null || (name.length !in 3..255 && name.matches("[a-zA-Z0-9-_.]+".toRegex()))) {
+                throw DynamoDbException.builder()
+                    .message(
+                        "Invalid table/index name.  Table/index names must be between 3 and 255 characters long," +
+                            "and may contain only the characters a-z, A-Z, 0-9, '_', '-', and '.'"
+                    )
+                    .build()
+            }
+            if (!index.hasKeySchema()) {
+                throw DynamoDbException.builder()
+                    .message("No defined key schema.  A key schema containing at least a hash key must be defined for all tables")
+                    .build()
+            }
+            if (index.projection() == null) {
+                throw DynamoDbException.builder()
+                    .message("Indexes must have a projection specified")
+                    .build()
+            }
+        }
         return request.toTableMetadata().also {
             storage.createTable(it)
             tablesMetadata[it.tableName] = it
