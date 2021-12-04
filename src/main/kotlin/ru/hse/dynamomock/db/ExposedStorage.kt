@@ -122,6 +122,17 @@ class ExposedStorage : DataStorageLayer {
         val stringSortKey = text("stringSortKey").nullable().default(null)
         val numSortKey = decimal("numSortKey", 20, 0).nullable().default(null)
 
+        val stringLSISortKey1 = text("stringLSISortKey1").nullable().default(null)
+        val numLSISortKey1 = decimal("numLSISortKey1", 20, 0).nullable().default(null)
+        val stringLSISortKey2 = text("stringLSISortKey2").nullable().default(null)
+        val numLSISortKey2 = decimal("numLSISortKey2", 20, 0).nullable().default(null)
+        val stringLSISortKey3 = text("stringLSISortKey3").nullable().default(null)
+        val numLSISortKey3 = decimal("numLSISortKey3", 20, 0).nullable().default(null)
+        val stringLSISortKey4 = text("stringLSISortKey4").nullable().default(null)
+        val numLSISortKey4 = decimal("numLSISortKey4", 20, 0).nullable().default(null)
+        val stringLSISortKey5 = text("stringLSISortKey5").nullable().default(null)
+        val numLSISortKey5 = decimal("numLSISortKey5", 20, 0).nullable().default(null)
+
         override val primaryKey: PrimaryKey = PrimaryKey(id)
     }
 
