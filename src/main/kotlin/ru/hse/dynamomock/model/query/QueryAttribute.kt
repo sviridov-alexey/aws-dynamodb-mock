@@ -56,11 +56,11 @@ fun QueryRequest.retrieveAttributesTransformer(): (Map<String, AttributeValue>) 
             projection.mapNotNull { attribute ->
                 val name = attribute.simpleName
                 if (name in items) {
-                    attribute.retrieve(mapOf(name to items.getValue(name)))?.let { name to it }
+                    attribute.retrieve(mapOf(name to items.getValue(name)))?.let { name to items.getValue(name) }
                 } else {
                     null
                 }
-            }.toMap()
+            }.distinctBy { it.first }.toMap()
         }
     } else if (attributesToGet != null) {
         return { items ->

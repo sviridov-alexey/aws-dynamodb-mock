@@ -627,6 +627,143 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
         expected = ExpectedItems(items = listOf(items[2], items[0], items[1]), scannedCount = 3)
         test()
     }
+
+    @Test
+    fun `test attributes to get`() = test(autoRun = false) {
+        partKeyType = AttributeType.N
+        sortKeyType = AttributeType.S
+        items = listOf(
+            mapOf(
+                partKey to atN("10"),
+                sortKey to atS("1"),
+                "a" to atN("7"),
+                "b" to atS("13"),
+                "c" to atL(atS("20"), atS("-13"))
+            ),
+            mapOf(
+                partKey to atN("10"),
+                sortKey to atS("2"),
+                "a" to atS("13"),
+                "b" to atS("kek"),
+                "d" to atSS("one", "two")
+            ),
+            mapOf(partKey to atN("10"), sortKey to atS("3"), "b" to atNS("10", "1", "2")),
+            mapOf(partKey to atN("10"), sortKey to atS("4"), "e" to atN("-1")),
+            mapOf(partKey to atN("0"), sortKey to atS("5"), "a" to atN("10")),
+        )
+        val keyConditions = mapOf(partKey to condition(listOf(atN("10")), EQ))
+        query = query(
+            tableName = tableName,
+            keyConditions = keyConditions,
+            attributesToGet = listOf("a", "b", "d")
+        )
+        expected = ExpectedItems(scannedCount = 4, items = listOf(
+            mapOf("a" to atN("7"), "b" to atS("13")),
+            mapOf("a" to atS("13"), "b" to atS("kek"), "d" to atSS("one", "two")),
+            mapOf("b" to atNS("10", "1", "2")),
+            mapOf()
+        ))
+        test()
+
+        query = query(
+            tableName = tableName,
+            keyConditions = keyConditions,
+            attributesToGet = listOf("d"),
+            select = Select.SPECIFIC_ATTRIBUTES
+        )
+        expected = ExpectedItems(scannedCount = 4, items = listOf(
+            mapOf(),
+            mapOf("d" to atSS("one", "two")),
+            mapOf(),
+            mapOf()
+        ))
+        test()
+    }
+
+    @Test
+    fun `test projection expression`() = test(autoRun = false) {
+        partKeyType = AttributeType.N
+        sortKeyType = AttributeType.S
+        items = listOf(
+            mapOf(partKey to atN("10"), sortKey to atS("a"), "a" to atN("7"), "b" to atS("13")),
+            mapOf(partKey to atN("10"), sortKey to atS("w"), "a" to atS("13"), "b" to atS("a"), "d" to atSS("1", "2")),
+            mapOf(partKey to atN("10"), sortKey to atS("x"), "b" to atNS("10", "1", "2")),
+            mapOf(partKey to atN("10"), sortKey to atS("y"), "e" to atN("-1")),
+            mapOf(partKey to atN("0"), sortKey to atS("z"), "a" to atN("10")),
+        )
+        val keyConditionExpression = "$partKey = :v"
+        val values = mapOf(":v" to atN("10"))
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = keyConditionExpression,
+            expressionAttributeValues = values,
+            projectionExpression = "a,\t\t b"
+        )
+        expected = ExpectedItems(scannedCount = 4, items = listOf(
+            mapOf("a" to atN("7"), "b" to atS("13")),
+            mapOf("a" to atS("13"), "b" to atS("a")),
+            mapOf("b" to atNS("10", "1", "2")),
+            mapOf()
+        ))
+        test()
+
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = keyConditionExpression,
+            expressionAttributeValues = values,
+            projectionExpression = "b",
+            select = Select.SPECIFIC_ATTRIBUTES
+        )
+        expected = ExpectedItems(scannedCount = 4, items = listOf(
+            mapOf("b" to atS("13")),
+            mapOf("b" to atS("a")),
+            mapOf("b" to atNS("10", "1", "2")),
+            mapOf()
+        ))
+        test()
+    }
+
+    @Test
+    fun `test projection expression nested attributes`() = test(autoRun = false) {
+        partKeyType = AttributeType.N
+        sortKeyType = AttributeType.S
+        items = listOf(
+            mapOf(
+                partKey to atN("0"),
+                sortKey to atS("1"),
+                "a" to atM("f" to atL(atS("a"), atN("2"))),
+                "b" to atL(atM("f" to atS("k"), "s" to atN("20")))
+            ),
+            mapOf(
+                partKey to atN("0"),
+                sortKey to atS("11"),
+                "a" to atM("f" to atM("f" to atS("kek"), "s" to atL(atS("kek"), atN("0")))),
+                "b" to atL(atM("f" to atN("20")), atL(atL(atS("kek"))))
+            )
+        )
+        val keyConditionExpression = "$partKey = :v"
+        val values = mapOf(":v" to atN("0"))
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = keyConditionExpression,
+            expressionAttributeValues = values,
+            projectionExpression = "a.f, a.s,b[0].f, b[1],    $partKey, $sortKey"
+        )
+        expected = ExpectedItems(items = items, scannedCount = 2)
+        test()
+
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = keyConditionExpression,
+            expressionAttributeValues = values,
+            projectionExpression = "a.f.s[1]"
+        )
+        expected = ExpectedItems(scannedCount = 2, items = listOf(
+            mapOf(),
+            mapOf("a" to items[1].getValue("a"))
+        ))
+        test()
+    }
 }
 
 private fun ComparisonOperator.toSign() = when (this) {
