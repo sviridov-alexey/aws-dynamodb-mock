@@ -85,12 +85,12 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         val responseBuilder = QueryResponse.builder()
             .count(filteredItems.size)
             .scannedCount(items.size)
-        return if (request.select() == Select.COUNT) {
-            responseBuilder.build()
-        } else {
-            val transformer = request.retrieveAttributesTransformer()
-            responseBuilder.items(filteredItems.map(transformer)).build()
+
+        val transformer = request.retrieveAttributesTransformer()
+        if (request.select() != Select.COUNT) {
+            responseBuilder.items(filteredItems.map(transformer))
         }
+        return responseBuilder.build()
     }
 
     fun putItem(request: PutItemRequest): PutItemResponse {

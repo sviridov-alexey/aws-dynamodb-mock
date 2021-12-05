@@ -39,15 +39,20 @@ fun QueryRequest.retrieveAttributesTransformer(): (Map<String, AttributeValue>) 
         "Indexes are not supported in query yet."
     }
 
+    val projectionExpression = projectionExpression()
+    val attributesToGet = attributesToGet().takeIf { hasAttributesToGet() }
+
     if (select() == Select.ALL_ATTRIBUTES || select() == Select.COUNT) {
+        if (projectionExpression != null || attributesToGet != null) {
+            throw DynamoDbException.builder()
+                .message("ProjectionExpression and AttributesToGet must be null if Select != SPECIFIC_ATTRIBUTES")
+                .build()
+        }
         return { it }
     }
     if (select() != Select.SPECIFIC_ATTRIBUTES && select() != null) {
         throw DynamoDbException.builder().message("Unknown Select in query.").build()
     }
-
-    val projectionExpression = projectionExpression()
-    val attributesToGet = attributesToGet().takeIf { hasAttributesToGet() }
 
     // TODO take into account overlapped paths in projection
     when {
