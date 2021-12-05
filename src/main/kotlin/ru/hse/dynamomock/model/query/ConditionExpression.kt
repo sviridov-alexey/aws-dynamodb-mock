@@ -204,7 +204,7 @@ sealed interface ConditionExpression {
                 }
                 type.length == 2 && type.endsWith('S') -> {
                     if (type.first().toString() == operandTypeInfo.typeAsString) {
-                        (attrTypeInfo.value as List<*>).contains(operandTypeInfo.value)
+                        (attrTypeInfo.value as Set<*>).contains(operandTypeInfo.value)
                     } else {
                         false
                     }

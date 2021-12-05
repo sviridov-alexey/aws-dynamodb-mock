@@ -68,7 +68,9 @@ class ExposedStorage : DataStorageLayer {
         }
 
         return transaction {
-            table.select(condition).map { Json.decodeFromString(it[table.attributes]) }
+            table.select(condition)
+                .orderBy(table.stringSortKey to SortOrder.ASC, table.numSortKey to SortOrder.ASC)
+                .map { Json.decodeFromString(it[table.attributes]) }
         }
     }
 

@@ -3,12 +3,10 @@ package ru.hse.dynamomock
 import org.junit.jupiter.api.Test
 import ru.hse.dynamomock.model.TableMetadata
 import ru.hse.dynamomock.model.query.grammar.*
-import ru.hse.dynamomock.model.query.grammar.atN
-import ru.hse.dynamomock.model.query.grammar.atNS
-import ru.hse.dynamomock.model.query.grammar.atS
-import ru.hse.dynamomock.model.query.grammar.atSS
+import ru.hse.dynamomock.model.toAttributeTypeInfo
 import software.amazon.awssdk.services.dynamodb.model.*
 import software.amazon.awssdk.services.dynamodb.model.ComparisonOperator.*
+import java.math.BigDecimal
 import java.time.Instant
 import kotlin.properties.Delegates
 import kotlin.test.assertEquals
@@ -135,8 +133,8 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
         for (comparison in comparisons) {
             for (point in points) {
                 val expectedItems = items.filter {
-                    it[partKey]?.s() == value && comparison.compare(it[sortKey]?.n()?.toBigDecimal()!!, point)
-                }
+                    it.getValue(partKey).s() == value && comparison.compare(it.getValue(sortKey).n().toBigDecimal(), point)
+                }.sortedBy { it.getValue(sortKey).toAttributeTypeInfo().value as BigDecimal }
 
                 expected = Expected(items = expectedItems, scannedCount = expectedItems.size)
 
@@ -191,7 +189,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             keyConditionExpression = "begins_with ($sortKey, :start) and $partKey = :hello",
             expressionAttributeValues = mapOf(":start" to atS("frie"), ":hello" to atS("hello"))
         )
-        expected = Expected(items = listOf(items[0], items[1]), scannedCount = 2)
+        expected = Expected(items = listOf(items[1], items[0]), scannedCount = 2)
     }
 
     @Test
@@ -567,6 +565,36 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
         testFail("hello = :ten")
         testFail("map.hello[1] = :hi")
     }
+
+    @Test
+    fun `test scan index forward`() = test(autoRun = false) {
+        partKeyType = AttributeType.S
+        sortKeyType = AttributeType.N
+        items = listOf(
+            mapOf(partKey to atS("q"), sortKey to atN("10")),
+            mapOf(partKey to atS("q"), sortKey to atN("-15")),
+            mapOf(partKey to atS("q"), sortKey to atN("20")),
+            mapOf(partKey to atS("b"), sortKey to atN("13"))
+        )
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = "$partKey = :q",
+            expressionAttributeValues = mapOf(":q" to atS("q"))
+        )
+        expected = Expected(items = listOf(items[1], items[0], items[2]), scannedCount = 3)
+        test()
+
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = "$partKey = :q",
+            expressionAttributeValues = mapOf(":q" to atS("q")),
+            scanIndexForward = false
+        )
+        expected = Expected(items = listOf(items[2], items[0], items[1]), scannedCount = 3)
+        test()
+    }
+
+
 }
 
 private fun ComparisonOperator.toSign() = when (this) {
