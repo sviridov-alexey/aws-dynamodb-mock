@@ -764,6 +764,35 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
         ))
         test()
     }
+
+    @Test
+    fun `test select`() = test(autoRun = false) {
+        partKeyType = AttributeType.S
+        sortKeyType = AttributeType.S
+        items = listOf(
+            mapOf(partKey to atS("a"), sortKey to atS("b"), "a" to atN("20"), "b" to atS("kek")),
+            mapOf(partKey to atS("a"), sortKey to atS("a"), "a" to atS("20"), "c" to atN("20"))
+        )
+        val keyConditionExpression = "$partKey = :v"
+        val values = mapOf(":v" to atS("a"))
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = keyConditionExpression,
+            expressionAttributeValues = values,
+            scanIndexForward = false,
+            select = Select.ALL_ATTRIBUTES
+        )
+        expected = ExpectedItems(items = items, scannedCount = 2)
+        test()
+
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = keyConditionExpression,
+            expressionAttributeValues = values,
+            select = Select.COUNT
+        )
+        expected = ExpectedCount(count = 2, scannedCount = 2)
+    }
 }
 
 private fun ComparisonOperator.toSign() = when (this) {

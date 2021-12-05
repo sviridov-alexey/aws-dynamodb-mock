@@ -2,6 +2,7 @@ package ru.hse.dynamomock.model.query
 
 import ru.hse.dynamomock.model.query.grammar.ProjectionExpressionGrammar
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
+import software.amazon.awssdk.services.dynamodb.model.DynamoDbException
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
 import software.amazon.awssdk.services.dynamodb.model.Select
 
@@ -41,32 +42,35 @@ fun QueryRequest.retrieveAttributesTransformer(): (Map<String, AttributeValue>) 
     if (select() == Select.ALL_ATTRIBUTES || select() == Select.COUNT) {
         return { it }
     }
+    if (select() != Select.SPECIFIC_ATTRIBUTES && select() != null) {
+        throw DynamoDbException.builder().message("Unknown Select in query.").build()
+    }
 
     val projectionExpression = projectionExpression()
     val attributesToGet = attributesToGet().takeIf { hasAttributesToGet() }
-    if (projectionExpression == null && attributesToGet == null) {
-        return { it }
-    }
 
     // TODO take into account overlapped paths in projection
-    if (projectionExpression != null) {
-        val grammar = ProjectionExpressionGrammar(expressionAttributeNames() ?: emptyMap())
-        val projection = grammar.parse(projectionExpression)
-        return { items ->
-            projection.mapNotNull { attribute ->
-                val name = attribute.simpleName
-                if (name in items) {
-                    attribute.retrieve(mapOf(name to items.getValue(name)))?.let { name to items.getValue(name) }
-                } else {
-                    null
-                }
-            }.distinctBy { it.first }.toMap()
+    when {
+        projectionExpression != null -> {
+            val grammar = ProjectionExpressionGrammar(expressionAttributeNames() ?: emptyMap())
+            val projection = grammar.parse(projectionExpression)
+            return { items ->
+                projection.mapNotNull { attribute ->
+                    val name = attribute.simpleName
+                    if (name in items) {
+                        attribute.retrieve(mapOf(name to items.getValue(name)))?.let { name to items.getValue(name) }
+                    } else {
+                        null
+                    }
+                }.distinctBy { it.first }.toMap()
+            }
         }
-    } else if (attributesToGet != null) {
-        return { items ->
+        attributesToGet != null -> return { items ->
             attributesToGet.mapNotNull { if (it in items) it to items.getValue(it) else null }.toMap()
         }
-    } else {
-        return { it }
+        select() == null -> return { it }
+        else -> throw DynamoDbException.builder()
+            .message("Must specify the AttributesToGet or ProjectionExpression when choosing to get SPECIFIC_ATTRIBUTES.")
+            .build()
     }
 }
