@@ -232,10 +232,11 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     @Test
     fun `test filter expression comparisons`() = test(autoRun = false) {
         partKeyType = AttributeType.S
+        sortKeyType = AttributeType.N
         items = listOf(
-            mapOf(partKey to atS("wow"), "first" to atN("1234"), "second" to atN("1000")),
-            mapOf(partKey to atS("wow"), "first" to atN("4321"), "second" to atN("1")),
-            mapOf(partKey to atS("wow"), "first" to atN("1500"), "third" to atN("2"))
+            mapOf(partKey to atS("wow"), sortKey to atN("1"), "first" to atN("1234"), "second" to atN("1000")),
+            mapOf(partKey to atS("wow"), sortKey to atN("2"), "first" to atN("4321"), "second" to atN("1")),
+            mapOf(partKey to atS("wow"), sortKey to atN("3"), "first" to atN("1500"), "third" to atN("2"))
         )
         val keyConditionExpression = "$partKey = :val"
         val values = mapOf(":val" to atS("wow"), ":one" to atN("1000"), ":two" to atN("2000"))
@@ -280,12 +281,13 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     @Test
     fun `test filter expression begins with`() = test {
         partKeyType = AttributeType.S
+        sortKeyType = AttributeType.S
         items = listOf(
-            mapOf(partKey to atS("a"), "kek" to atS("hello")),
-            mapOf(partKey to atS("a"), "kek" to atS("hell!!")),
-            mapOf(partKey to atS("a"), "kek" to atS("hypothesis")),
-            mapOf(partKey to atS("b"), "kek" to atS("hello")),
-            mapOf(partKey to atS("a"))
+            mapOf(partKey to atS("a"), sortKey to atS("a"), "kek" to atS("hello")),
+            mapOf(partKey to atS("a"), sortKey to atS("b"), "kek" to atS("hell!!")),
+            mapOf(partKey to atS("a"), sortKey to atS("c"), "kek" to atS("hypothesis")),
+            mapOf(partKey to atS("b"), sortKey to atS("d"), "kek" to atS("hello")),
+            mapOf(partKey to atS("a"), sortKey to atS("e"))
         )
         query = query(
             tableName = tableName,
@@ -299,10 +301,11 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     @Test
     fun `test filter expression in`() = test {
         partKeyType = AttributeType.S
+        sortKeyType = AttributeType.S
         items = listOf(
-            mapOf(partKey to atS("part"), "wow" to atS("1")),
-            mapOf(partKey to atS("part"), "wow" to atS("2")),
-            mapOf(partKey to atS("part"), "wow" to atN("1")) // It is a number!
+            mapOf(partKey to atS("part"), sortKey to atS("1"), "wow" to atS("1")),
+            mapOf(partKey to atS("part"), sortKey to atS("2"), "wow" to atS("2")),
+            mapOf(partKey to atS("part"), sortKey to atS("3"), "wow" to atN("1")) // It is a number!
         )
         val values = mapOf(":one" to atS("1"), ":another" to atS("3"), ":num" to atN("10"), ":v" to atS("part"))
         query = query(
@@ -317,11 +320,12 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     @Test
     fun `test filter expression attributes`() = test(autoRun = false) {
         partKeyType = AttributeType.S
+        sortKeyType = AttributeType.S
         items = listOf(
-            mapOf(partKey to atS("123"), "a" to atN("1"), "b" to atS("ww")),
-            mapOf(partKey to atS("123"), "a" to atS("100"), "b" to atN("13")),
-            mapOf(partKey to atS("123"), "b" to atS("-1")),
-            mapOf(partKey to atS("124"), "a" to atN("1"), "b" to atS("ww"))
+            mapOf(partKey to atS("123"), sortKey to atS("1"), "a" to atN("1"), "b" to atS("ww")),
+            mapOf(partKey to atS("123"), sortKey to atS("2"), "a" to atS("100"), "b" to atN("13")),
+            mapOf(partKey to atS("123"), sortKey to atS("3"), "b" to atS("-1")),
+            mapOf(partKey to atS("124"), sortKey to atS("4"), "a" to atN("1"), "b" to atS("ww"))
         )
         val values = mapOf(":v" to atS("123"), ":s" to atS("S"))
         query = query(
@@ -355,12 +359,13 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     @Test
     fun `test filter expression contains in string and size`() = test(autoRun = false) {
         partKeyType = AttributeType.S
+        sortKeyType = AttributeType.N
         items = listOf(
-            mapOf(partKey to atS("hello"), "kek" to atS("my dear friend!")),
-            mapOf(partKey to atS("hello"), "kek" to atS("friend, how are you?")),
-            mapOf(partKey to atS("hello"), "kek" to atS("I love fried chicken!")),
-            mapOf(partKey to atS("kek"), "kek" to atS("my dear friend!")),
-            mapOf(partKey to atS("hello"), "kek2" to atS("friend!"))
+            mapOf(partKey to atS("hello"), sortKey to atN("1"), "kek" to atS("my dear friend!")),
+            mapOf(partKey to atS("hello"), sortKey to atN("10"), "kek" to atS("friend, how are you?")),
+            mapOf(partKey to atS("hello"), sortKey to atN("100"), "kek" to atS("I love fried chicken!")),
+            mapOf(partKey to atS("kek"), sortKey to atN("20"), "kek" to atS("my dear friend!")),
+            mapOf(partKey to atS("hello"), sortKey to atN("3"), "kek2" to atS("friend!"))
         )
         query = query(
             tableName = tableName,
@@ -384,12 +389,18 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     @Test
     fun `test filter expression contains in string set and size`() = test(autoRun = false) {
         partKeyType = AttributeType.S
+        sortKeyType = AttributeType.N
         items = listOf(
-            mapOf(partKey to atS("hello"), "kek" to atSS("ab", "ac", "ad"), "val" to atS("ab")),
-            mapOf(partKey to atS("hello"), "kek" to atSS("ab", "ac", "ae", "a"), "val" to atS("ae")),
-            mapOf(partKey to atS("hello"), "kek" to atSS("ac", "ad"), "val" to atS("ab")),
-            mapOf(partKey to atS("kek"), "kek" to atSS("ba", "bc"), "val" to atS("bc")),
-            mapOf(partKey to atS("hello"), "kek2" to atSS("ab", "ac", "ad"), "val" to atS("ab"))
+            mapOf(partKey to atS("hello"), sortKey to atN("1"), "kek" to atSS("ab", "ac", "ad"), "val" to atS("ab")),
+            mapOf(
+                partKey to atS("hello"),
+                sortKey to atN("2"),
+                "kek" to atSS("ab", "ac", "ae", "a"),
+                "val" to atS("ae")
+            ),
+            mapOf(partKey to atS("hello"), sortKey to atN("3"), "kek" to atSS("ac", "ad"), "val" to atS("ab")),
+            mapOf(partKey to atS("kek"), sortKey to atN("4"), "kek" to atSS("ba", "bc"), "val" to atS("bc")),
+            mapOf(partKey to atS("hello"), sortKey to atN("5"), "kek2" to atSS("ab", "ac", "ad"), "val" to atS("ab"))
         )
         query = query(
             tableName = tableName,
@@ -413,13 +424,14 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     @Test
     fun `test filter expression contains in num set`() = test {
         partKeyType = AttributeType.S
+        sortKeyType = AttributeType.N
         items = listOf(
-            mapOf(partKey to atS("hello"), "kek" to atNS("1", "2", "3")),
-            mapOf(partKey to atS("hello"), "kek" to atNS("2", "3", "10")),
-            mapOf(partKey to atS("hello"), "kek" to atNS("10", "-1", "3")),
-            mapOf(partKey to atS("kek"), "kek" to atNS("10", "100", "2")),
-            mapOf(partKey to atS("hello"), "kek2" to atNS("1", "2", "3")),
-            mapOf(partKey to atS("hello"), "kek" to atSS("1", "2", "3")) // it is a string set!
+            mapOf(partKey to atS("hello"), sortKey to atN("1"), "kek" to atNS("1", "2", "3")),
+            mapOf(partKey to atS("hello"), sortKey to atN("2"), "kek" to atNS("2", "3", "10")),
+            mapOf(partKey to atS("hello"), sortKey to atN("3"), "kek" to atNS("10", "-1", "3")),
+            mapOf(partKey to atS("kek"), sortKey to atN("6"), "kek" to atNS("10", "100", "2")),
+            mapOf(partKey to atS("hello"), sortKey to atN("7"), "kek2" to atNS("1", "2", "3")),
+            mapOf(partKey to atS("hello"), sortKey to atN("8"), "kek" to atSS("1", "2", "3")) // it is a string set!
         )
         query = query(
             tableName = tableName,
@@ -433,13 +445,14 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     @Test
     fun `test filter expression size of lists and maps`() = test {
         partKeyType = AttributeType.S
+        sortKeyType = AttributeType.S
         items = listOf(
-            mapOf(partKey to atS("hello"), "kek" to atM("a" to atS("a")), "len" to atN("1")),
-            mapOf(partKey to atS("hello"), "kek" to atL(atS("a"), atS("b")), "len" to atN("2")),
-            mapOf(partKey to atS("hello"), "kek" to atM("a" to atN("1"), "b" to atS("kek"))),
-            mapOf(partKey to atS("kek"), "kek" to atM("a" to atS("a")), "len" to atN("1")),
-            mapOf(partKey to atS("hello"), "kek2" to atL(atS("1"), atS("2")), "len" to atN("2")),
-            mapOf(partKey to atS("hello"), "kek" to atL(atS("2")), "len" to atN("2"))
+            mapOf(partKey to atS("hello"), sortKey to atS("a"), "kek" to atM("a" to atS("a")), "len" to atN("1")),
+            mapOf(partKey to atS("hello"), sortKey to atS("b"), "kek" to atL(atS("a"), atS("b")), "len" to atN("2")),
+            mapOf(partKey to atS("hello"), sortKey to atS("c"), "kek" to atM("a" to atN("1"), "b" to atS("kek"))),
+            mapOf(partKey to atS("kek"), sortKey to atS("d"), "kek" to atM("a" to atS("a")), "len" to atN("1")),
+            mapOf(partKey to atS("hello"), sortKey to atS("x"), "kek2" to atL(atS("1"), atS("2")), "len" to atN("2")),
+            mapOf(partKey to atS("hello"), sortKey to atS("y"), "kek" to atL(atS("2")), "len" to atN("2"))
         )
         query = query(
             tableName = tableName,
@@ -453,15 +466,18 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     @Test
     fun `test simple query filter`() = test(autoRun = false) {
         partKeyType = AttributeType.N
+        sortKeyType = AttributeType.N
         items = listOf(
             mapOf(
                 partKey to atN("-10"),
+                sortKey to atN("1"),
                 "one" to atS("what"),
                 "list" to atSS("one", "two"),
                 "val" to atN("73")
             ),
             mapOf(
                 partKey to atN("-10"),
+                sortKey to atN("2"),
                 "one1" to atN("10"),
                 "list" to atSS("two", "three"),
                 "val" to atN("37")
@@ -512,16 +528,17 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     @Test
     fun `test filter expression complex`() = test {
         partKeyType = AttributeType.S
+        sortKeyType = AttributeType.N
         items = listOf(
-            mapOf(partKey to atS("seven"), "one" to atN("10"), "two" to atS("seven")),
-            mapOf(partKey to atS("seven"), "list" to atL(atN("10"), atS("-10"), atSS("kek"))),
-            mapOf(partKey to atS("seven"), "set" to atNS("2", "1")),
-            mapOf(partKey to atS("seven"), "list" to atL(atS("10"), atN("-10"), atSS("kek"))),
-            mapOf(partKey to atS("seven"), "set" to atNS("1", "2", "3")),
-            mapOf(partKey to atS("seven"), "set" to atSS("1", "2")),
-            mapOf(partKey to atS("seven"), "one" to atN("5"), "two" to atS("seven")),
-            mapOf(partKey to atS("seven"), "one" to atN("10"), "two" to atS("Seven")),
-            mapOf(partKey to atS("Seven"), "one" to atN("10"), "two" to atS("seven"))
+            mapOf(partKey to atS("seven"), sortKey to atN("1"), "one" to atN("10"), "two" to atS("seven")),
+            mapOf(partKey to atS("seven"), sortKey to atN("2"), "list" to atL(atN("10"), atS("-10"), atSS("kek"))),
+            mapOf(partKey to atS("seven"), sortKey to atN("3"), "set" to atNS("2", "1")),
+            mapOf(partKey to atS("seven"), sortKey to atN("4"), "list" to atL(atS("10"), atN("-10"), atSS("kek"))),
+            mapOf(partKey to atS("seven"), sortKey to atN("5"), "set" to atNS("1", "2", "3")),
+            mapOf(partKey to atS("seven"), sortKey to atN("6"), "set" to atSS("1", "2")),
+            mapOf(partKey to atS("seven"), sortKey to atN("7"), "one" to atN("5"), "two" to atS("seven")),
+            mapOf(partKey to atS("seven"), sortKey to atN("9"), "one" to atN("10"), "two" to atS("Seven")),
+            mapOf(partKey to atS("Seven"), sortKey to atN("10"), "one" to atN("10"), "two" to atS("seven"))
         )
         query = query(
             tableName = tableName,
