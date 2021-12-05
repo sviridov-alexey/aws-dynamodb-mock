@@ -10,6 +10,7 @@ import java.math.BigDecimal
 import java.time.Instant
 import kotlin.properties.Delegates
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     enum class AttributeType { N, S } // TODO test B
@@ -48,14 +49,30 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             mock.createTable(metadata.toCreateTableRequest())
             items.forEach { mock.putItem(putItemRequestBuilder(tableName, it)) }
             mock.query(query).apply {
-                assertEquals(expected.items.size, count())
-                assertEquals(expected.scannedCount, scannedCount())
-                assertEquals(expected.items, items())
+                expected.assert(this)
             }
         }
     }
 
-    private class Expected(val items: List<Map<String, AttributeValue>>, val scannedCount: Int)
+    private sealed interface Expected {
+        fun assert(response: QueryResponse)
+    }
+
+    private data class ExpectedItems(val items: List<Map<String, AttributeValue>>, val scannedCount: Int) : Expected {
+        override fun assert(response: QueryResponse) {
+            assertEquals(items.size, response.count())
+            assertEquals(scannedCount, response.scannedCount())
+            assertEquals(items, response.items())
+        }
+    }
+
+    private data class ExpectedCount(val count: Int, val scannedCount: Int) : Expected {
+        override fun assert(response: QueryResponse) {
+            assertNull(response.items())
+            assertEquals(count, response.count())
+            assertEquals(scannedCount, response.scannedCount())
+        }
+    }
 
     private fun test(autoRun: Boolean = true, block: InsideTest.() -> Unit) {
         InsideTest().apply {
@@ -113,7 +130,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             keyConditionExpression = "$partKey = :myVal",
             expressionAttributeValues = mapOf(":myVal" to atN("123"))
         )
-        expected = Expected(items = listOf(items[0]), scannedCount = 1)
+        expected = ExpectedItems(items = listOf(items[0]), scannedCount = 1)
     }
 
     @Test
@@ -136,7 +153,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
                     it.getValue(partKey).s() == value && comparison.compare(it.getValue(sortKey).n().toBigDecimal(), point)
                 }.sortedBy { it.getValue(sortKey).toAttributeTypeInfo().value as BigDecimal }
 
-                expected = Expected(items = expectedItems, scannedCount = expectedItems.size)
+                expected = ExpectedItems(items = expectedItems, scannedCount = expectedItems.size)
 
                 query = query(
                     tableName = tableName,
@@ -171,7 +188,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             expressionAttributeNames = mapOf("#kek" to partKey),
             expressionAttributeValues = mapOf(":pp" to atS("a"), ":ss" to atS("ab"))
         )
-        expected = Expected(items = listOf(items[0]), scannedCount = 1)
+        expected = ExpectedItems(items = listOf(items[0]), scannedCount = 1)
     }
 
     @Test
@@ -189,7 +206,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             keyConditionExpression = "begins_with ($sortKey, :start) and $partKey = :hello",
             expressionAttributeValues = mapOf(":start" to atS("frie"), ":hello" to atS("hello"))
         )
-        expected = Expected(items = listOf(items[1], items[0]), scannedCount = 2)
+        expected = ExpectedItems(items = listOf(items[1], items[0]), scannedCount = 2)
     }
 
     @Test
@@ -209,7 +226,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
                 sortKey to condition(listOf(atS("bark"), atS("carlson")), BETWEEN)
             )
         )
-        expected = Expected(items = listOf(items[0], items[1]), scannedCount = 2)
+        expected = ExpectedItems(items = listOf(items[0], items[1]), scannedCount = 2)
     }
 
     @Test
@@ -229,7 +246,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             filterExpression = "first <= :two and second >= :one",
             expressionAttributeValues = values
         )
-        expected = Expected(items = listOf(items[0]), scannedCount = 3)
+        expected = ExpectedItems(items = listOf(items[0]), scannedCount = 3)
         test()
 
         query = query(
@@ -238,7 +255,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             filterExpression = "first <= :two or second <= :one",
             expressionAttributeValues = values
         )
-        expected = Expected(items = items, scannedCount = 3)
+        expected = ExpectedItems(items = items, scannedCount = 3)
         test()
 
         query = query(
@@ -247,7 +264,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             filterExpression = "first = :two or third <> :one",
             expressionAttributeValues = values
         )
-        expected = Expected(items = listOf(items[2]), scannedCount = 3)
+        expected = ExpectedItems(items = listOf(items[2]), scannedCount = 3)
         test()
 
         query = query(
@@ -256,7 +273,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             filterExpression = "first between second and :two and not third = :one",
             expressionAttributeValues = values
         )
-        expected = Expected(items = listOf(items[0]), scannedCount = 3)
+        expected = ExpectedItems(items = listOf(items[0]), scannedCount = 3)
         test()
     }
 
@@ -276,7 +293,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             filterExpression = "begins_with (kek, :start)",
             expressionAttributeValues = mapOf(":val" to atS("a"), ":start" to atS("hell"))
         )
-        expected = Expected(items = listOf(items[0], items[1]), scannedCount = 4)
+        expected = ExpectedItems(items = listOf(items[0], items[1]), scannedCount = 4)
     }
 
     @Test
@@ -294,7 +311,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             filterExpression = "wow in (:one, :v, :another, :num)",
             expressionAttributeValues = values
         )
-        expected = Expected(items = listOf(items[0]), scannedCount = 3)
+        expected = ExpectedItems(items = listOf(items[0]), scannedCount = 3)
     }
 
     @Test
@@ -313,7 +330,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             filterExpression = "attribute_exists (a)",
             expressionAttributeValues = values
         )
-        expected = Expected(items = listOf(items[0], items[1]), scannedCount = 3)
+        expected = ExpectedItems(items = listOf(items[0], items[1]), scannedCount = 3)
         test()
 
         query = query(
@@ -322,7 +339,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             filterExpression = "attribute_not_exists(a)",
             expressionAttributeValues = values
         )
-        expected = Expected(items = listOf(items[2]), scannedCount = 3)
+        expected = ExpectedItems(items = listOf(items[2]), scannedCount = 3)
         test()
 
         query = query(
@@ -331,7 +348,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             filterExpression = "attribute_type (b, :s)",
             expressionAttributeValues = values
         )
-        expected = Expected(items = listOf(items[0], items[2]), scannedCount = 3)
+        expected = ExpectedItems(items = listOf(items[0], items[2]), scannedCount = 3)
         test()
     }
 
@@ -351,7 +368,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             filterExpression = "contains (kek, :a)",
             expressionAttributeValues = mapOf(":v" to atS("hello"), ":a" to atS("friend"))
         )
-        expected = Expected(items = listOf(items[0], items[1]), scannedCount = 4)
+        expected = ExpectedItems(items = listOf(items[0], items[1]), scannedCount = 4)
         test()
 
         query = query(
@@ -360,7 +377,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             filterExpression = "size (kek) <= :len",
             expressionAttributeValues = mapOf(":v" to atS("hello"), ":len" to atN("15"))
         )
-        expected = Expected(items = listOf(items[0]), scannedCount = 4)
+        expected = ExpectedItems(items = listOf(items[0]), scannedCount = 4)
         test()
     }
 
@@ -380,7 +397,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             filterExpression = "contains (kek, val)",
             expressionAttributeValues = mapOf(":v" to atS("hello"))
         )
-        expected = Expected(items = listOf(items[0], items[1]), scannedCount = 4)
+        expected = ExpectedItems(items = listOf(items[0], items[1]), scannedCount = 4)
         test()
 
         query = query(
@@ -389,7 +406,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             filterExpression = "size (kek) <> :len",
             expressionAttributeValues = mapOf(":v" to atS("hello"), ":len" to atN("4"))
         )
-        expected = Expected(items = listOf(items[0], items[2]), scannedCount = 4)
+        expected = ExpectedItems(items = listOf(items[0], items[2]), scannedCount = 4)
         test()
     }
 
@@ -410,7 +427,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             filterExpression = "contains (kek, :value)",
             expressionAttributeValues = mapOf(":v" to atS("hello"), ":value" to atN("2"))
         )
-        expected = Expected(items = listOf(items[0], items[1]), scannedCount = 5)
+        expected = ExpectedItems(items = listOf(items[0], items[1]), scannedCount = 5)
     }
 
     @Test
@@ -430,7 +447,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             filterExpression = "size (kek) = len",
             expressionAttributeValues = mapOf(":v" to atS("hello"))
         )
-        expected = Expected(items = listOf(items[0], items[1]), scannedCount = 5)
+        expected = ExpectedItems(items = listOf(items[0], items[1]), scannedCount = 5)
     }
 
     @Test
@@ -455,7 +472,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             keyConditions = mapOf(partKey to condition(listOf(atN("-10")), EQ)),
             queryFilter = mapOf("one" to condition(listOf(), NOT_NULL))
         )
-        expected = Expected(items = listOf(items[0]), scannedCount = 2)
+        expected = ExpectedItems(items = listOf(items[0]), scannedCount = 2)
         test()
 
         query = query(
@@ -464,7 +481,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             queryFilter = mapOf("one" to condition(listOf(), NOT_NULL), "one1" to condition(listOf(), NOT_NULL)),
             conditionalOperator = ConditionalOperator.OR
         )
-        expected = Expected(items = listOf(items[0], items[1]), scannedCount = 2)
+        expected = ExpectedItems(items = listOf(items[0], items[1]), scannedCount = 2)
         test()
 
         query = query(
@@ -472,7 +489,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             keyConditions = mapOf(partKey to condition(listOf(atN("-10")), EQ)),
             queryFilter = mapOf("one" to condition(listOf(), NOT_NULL), "one1" to condition(listOf(), NOT_NULL))
         )
-        expected = Expected(items = listOf(), scannedCount = 2)
+        expected = ExpectedItems(items = listOf(), scannedCount = 2)
         test()
 
         query = query(
@@ -480,7 +497,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             keyConditions = mapOf(partKey to condition(listOf(atN("-10")), EQ)),
             queryFilter = mapOf("list" to condition(listOf(atS("two")), CONTAINS))
         )
-        expected = Expected(items = listOf(items[0], items[1]), scannedCount = 2)
+        expected = ExpectedItems(items = listOf(items[0], items[1]), scannedCount = 2)
         test()
 
         query = query(
@@ -488,7 +505,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             keyConditions = mapOf(partKey to condition(listOf(atN("-10")), EQ)),
             queryFilter = mapOf("val" to condition(listOf(atN("50")), LT))
         )
-        expected = Expected(items = listOf(items[1]), scannedCount = 2)
+        expected = ExpectedItems(items = listOf(items[1]), scannedCount = 2)
         test()
     }
 
@@ -519,7 +536,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
                 ":c" to atL(atS("10"), atN("-10"), atSS("kek"))
             )
         )
-        expected = Expected(items = listOf(items[0], items[1], items[2]), scannedCount = 8)
+        expected = ExpectedItems(items = listOf(items[0], items[1], items[2]), scannedCount = 8)
     }
 
     @Test
@@ -547,7 +564,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
                 filterExpression = filterExpression,
                 expressionAttributeValues = values
             )
-            expected = Expected(items = expectedItems, scannedCount = 1)
+            expected = ExpectedItems(items = expectedItems, scannedCount = 1)
             test()
         }
         fun testSuccess(filterExpression: String) = test(filterExpression, items)
@@ -581,7 +598,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             keyConditionExpression = "$partKey = :q",
             expressionAttributeValues = mapOf(":q" to atS("q"))
         )
-        expected = Expected(items = listOf(items[1], items[0], items[2]), scannedCount = 3)
+        expected = ExpectedItems(items = listOf(items[1], items[0], items[2]), scannedCount = 3)
         test()
 
         query = query(
@@ -590,11 +607,9 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             expressionAttributeValues = mapOf(":q" to atS("q")),
             scanIndexForward = false
         )
-        expected = Expected(items = listOf(items[2], items[0], items[1]), scannedCount = 3)
+        expected = ExpectedItems(items = listOf(items[2], items[0], items[1]), scannedCount = 3)
         test()
     }
-
-
 }
 
 private fun ComparisonOperator.toSign() = when (this) {
