@@ -1,8 +1,9 @@
 package ru.hse.dynamomock.model.query
 
+import ru.hse.dynamomock.exception.dynamoException
+import ru.hse.dynamomock.exception.dynamoRequires
 import ru.hse.dynamomock.model.query.grammar.ProjectionExpressionGrammar
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
-import software.amazon.awssdk.services.dynamodb.model.DynamoDbException
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
 import software.amazon.awssdk.services.dynamodb.model.Select
 
@@ -35,7 +36,7 @@ sealed interface QueryAttribute {
 }
 
 fun QueryRequest.retrieveAttributesTransformer(): (Map<String, AttributeValue>) -> (Map<String, AttributeValue>) {
-    require(indexName() == null || select() == Select.ALL_PROJECTED_ATTRIBUTES) {
+    dynamoRequires(indexName() == null || select() == Select.ALL_PROJECTED_ATTRIBUTES) {
         "Indexes are not supported in query yet."
     }
 
@@ -43,21 +44,17 @@ fun QueryRequest.retrieveAttributesTransformer(): (Map<String, AttributeValue>) 
     val attributesToGet = attributesToGet().takeIf { hasAttributesToGet() }
 
     if (select() == Select.ALL_ATTRIBUTES || select() == Select.COUNT) {
-        if (projectionExpression != null || attributesToGet != null) {
-            throw DynamoDbException.builder()
-                .message("ProjectionExpression and AttributesToGet must be null if Select != SPECIFIC_ATTRIBUTES")
-                .build()
+        dynamoRequires(projectionExpression == null && attributesToGet == null) {
+            "ProjectionExpression and AttributesToGet must be null if Select != SPECIFIC_ATTRIBUTES"
         }
         return { it }
     }
-    if (select() != Select.SPECIFIC_ATTRIBUTES && select() != null) {
-        throw DynamoDbException.builder().message("Unknown Select in query.").build()
+    dynamoRequires(select() == Select.SPECIFIC_ATTRIBUTES || select() == null) {
+        "Unknown Select in query."
     }
 
-    if (attributesToGet != null && projectionExpression != null) {
-        throw DynamoDbException.builder()
-            .message("Cannot specify AttributesToGet and ProjectionExpression at the same time.")
-            .build()
+    dynamoRequires(attributesToGet == null || projectionExpression == null) {
+        "Cannot specify AttributesToGet and ProjectionExpression at the same time."
     }
 
     // TODO take into account overlapped paths in projection
@@ -78,15 +75,17 @@ fun QueryRequest.retrieveAttributesTransformer(): (Map<String, AttributeValue>) 
         }
         attributesToGet != null -> {
             if (attributesToGet != attributesToGet.distinct()) {
-                throw DynamoDbException.builder().message("AttributesToGet contain two identical attributes.").build()
+                throw dynamoException("AttributesToGet contain two identical attributes.")
             }
             return { items ->
                 attributesToGet.mapNotNull { if (it in items) it to items.getValue(it) else null }.toMap()
             }
         }
-        select() == null -> return { it }
-        else -> throw DynamoDbException.builder()
-            .message("Must specify the AttributesToGet or ProjectionExpression when choosing to get SPECIFIC_ATTRIBUTES.")
-            .build()
+        select() == null -> {
+            return { it }
+        }
+        else -> throw dynamoException(
+            "Must specify the AttributesToGet or ProjectionExpression when choosing to get SPECIFIC_ATTRIBUTES."
+        )
     }
 }

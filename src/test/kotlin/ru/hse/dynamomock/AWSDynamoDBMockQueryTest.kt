@@ -871,7 +871,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test fail non existent table`() = failed<IllegalArgumentException> {
+    fun `test fail non existent table`() = failed<DynamoDbException> {
         query = query(
             tableName = "non-existent",
             keyConditionExpression = "$partKey = :v",
@@ -1046,7 +1046,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
 
     @Test
     fun `test fail invalid limit`() {
-        failed<IllegalArgumentException> { // TODO
+        failed<DynamoDbException> {
             query = query(
                 tableName = tableName,
                 keyConditionExpression = "$partKey = :v",
@@ -1054,7 +1054,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
                 limit = 0
             )
         }
-        failed<IllegalArgumentException> { // TODO
+        failed<DynamoDbException> {
             query = query(
                 tableName = tableName,
                 keyConditionExpression = "$partKey = :v",

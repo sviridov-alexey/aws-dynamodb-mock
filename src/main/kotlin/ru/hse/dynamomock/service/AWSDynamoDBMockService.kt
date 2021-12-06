@@ -1,6 +1,8 @@
 package ru.hse.dynamomock.service
 
 import ru.hse.dynamomock.db.DataStorageLayer
+import ru.hse.dynamomock.exception.dynamoException
+import ru.hse.dynamomock.exception.dynamoRequires
 import ru.hse.dynamomock.model.*
 import ru.hse.dynamomock.model.query.retrieveAttributesTransformer
 import ru.hse.dynamomock.model.query.retrieveFilterExpression
@@ -20,11 +22,11 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         } else if (attributeValue.b() != null) {
             "B" to StringKey(keyName, Base64.getEncoder().encodeToString(attributeValue.b().asByteArray()))
         } else {
-            throw DynamoDbException.builder().message("Member must satisfy enum value set: [B, N, S]").build()
+            throw dynamoException("Member must satisfy enum value set: [B, N, S]")
         }
 
     fun createTable(request: CreateTableRequest): TableDescription {
-        require(request.tableName() !in tablesMetadata) {
+        dynamoRequires(request.tableName() !in tablesMetadata) {
             "Table ${request.tableName()} already exists. Cannot create."
         }
         return request.toTableMetadata().also {
@@ -35,7 +37,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
     fun deleteTable(request: DeleteTableRequest): TableDescription {
         val name = request.tableName()
-        require(name in tablesMetadata) {
+        dynamoRequires(name in tablesMetadata) {
             "Cannot delete non-existent table."
         }
         storage.deleteTable(name)
@@ -44,7 +46,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
     fun describeTable(request: DescribeTableRequest): TableDescription {
         val name = request.tableName()
-        require(name in tablesMetadata) {
+        dynamoRequires(name in tablesMetadata) {
             "Cannot describe non-existent table $name."
         }
         return tablesMetadata.getValue(name).toTableDescription()
@@ -52,32 +54,30 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
     // TODO take into account that it's impossible to use expression-like and not-expression-like at the same query
     fun query(request: QueryRequest): QueryResponse {
-        require(request.limit() == null || request.limit() > 0) {
+        dynamoRequires(request.limit() == null || request.limit() > 0) {
             "Limit must be >= 1."
         }
-        require(request.indexName() == null) {
+        dynamoRequires(request.indexName() == null) {
             "Indexes are not supported in query yet."
         }
-        require(request.consistentRead() != false) {
+        dynamoRequires(request.consistentRead() != false) {
             "Non-consistent read is not supported in query yet."
         }
 
         val tableName = request.tableName()
-        require(tableName in tablesMetadata) {
+        dynamoRequires(tableName in tablesMetadata) {
             "Cannot query from non-existent table $tableName."
         }
 
         val table = tablesMetadata.getValue(tableName)
         val keyConditions = request.retrieveKeyConditions()
         keyConditions[table.partitionKey].let {
-            if (it == null || it.comparisonOperator() != ComparisonOperator.EQ) {
-                throw DynamoDbException.builder().message("Partition key must use '=' operator.").build()
+            dynamoRequires(it != null && it.comparisonOperator() == ComparisonOperator.EQ) {
+                "Partition key must use '=' operator."
             }
         }
-        if (keyConditions.size > 2 || keyConditions.size == 2 && table.sortKey !in keyConditions) {
-            throw DynamoDbException.builder() // TODO not forget to add indexes
-                .message("Only partition and sort keys can be used in key conditions.")
-                .build()
+        dynamoRequires(keyConditions.size <= 2 && !(keyConditions.size == 2 && table.sortKey !in keyConditions)) {
+            "Only partition and sort keys can be used in key conditions."
         }
 
         val items = storage.query(tableName, keyConditions).let {
@@ -181,10 +181,8 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     }
 
     fun batchWriteItem(batchWriteItemRequest: BatchWriteItemRequest): BatchWriteItemResponse {
-        if (!batchWriteItemRequest.hasRequestItems() || batchWriteItemRequest.requestItems().isEmpty()) {
-            throw DynamoDbException.builder()
-                .message("BatchWriteItem cannot have a null or no requests set")
-                .build()
+        dynamoRequires(batchWriteItemRequest.hasRequestItems() && batchWriteItemRequest.requestItems().isNotEmpty()) {
+            "BatchWriteItem cannot have a null or no requests set"
         }
         val requestItems = batchWriteItemRequest.requestItems()
         val putItemRequests = mutableListOf<DBPutItemRequest>()
@@ -197,10 +195,8 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
         val batchSize = requestItems.entries.sumOf { it.value.size }
 
-        if (batchSize > 25) {
-            throw DynamoDbException.builder()
-                .message("Too many items requested for the BatchWriteItem call")
-                .build()
+        dynamoRequires(batchSize <= 25) {
+            "Too many items requested for the BatchWriteItem call"
         }
 
         requestItems.entries.forEach{ tableRequests ->
@@ -210,19 +206,18 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                 val putRequest = it.putRequest()
                 val deleteRequest = it.deleteRequest()
                 if (putRequest == null && deleteRequest == null) {
-                    throw DynamoDbException.builder()
-                        .message("Supplied AttributeValue has more than one datatypes set, must contain exactly one of the supported datatypes")
-                        .build()
+                    throw dynamoException(
+                        "Supplied AttributeValue has more than one datatypes set, must contain exactly one of the supported datatypes"
+                    )
                 } else if (putRequest != null && putRequest.hasItem() && (deleteRequest == null || !deleteRequest.hasKey())) {
                     val (partitionKey, sortKey) = getRequestMetadata(tableName, putRequest.item())
                     val keys = putRequest.item().filter { item ->
                         item.key == partitionKey.attributeName ||  item.key == sortKey?.attributeName
                     }
-                    if (items.contains(keys)) {
-                        throw DynamoDbException.builder()
-                            .message("Provided list of item keys contains duplicates")
-                            .build()
+                    dynamoRequires(keys !in items) {
+                        "Provided list of item keys contains duplicates"
                     }
+
                     items.add(keys)
                     val itemsList = putRequest.item().map { (k, v) -> AttributeInfo(k, v.toAttributeTypeInfo()) }
                     putItemRequests.add(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
@@ -230,18 +225,16 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                     val (partitionKey, sortKey) = getRequestMetadata(tableName, deleteRequest.key())
 
                     val keys = deleteRequest.key()
-                    if (items.contains(keys)) {
-                        throw DynamoDbException.builder()
-                            .message("Provided list of item keys contains duplicates")
-                            .build()
+                    dynamoRequires(keys !in items) {
+                        "Provided list of item keys contains duplicates"
                     }
 
                     items.add(keys)
                     deleteItemRequests.add(DBDeleteItemRequest(tableName, partitionKey, sortKey))
                 } else {
-                    throw DynamoDbException.builder()
-                        .message("Supplied AttributeValue has more than one datatypes set, must contain exactly one of the supported datatypes")
-                        .build()
+                    throw dynamoException(
+                        "Supplied AttributeValue has more than one datatypes set, must contain exactly one of the supported datatypes"
+                    )
                 }
             }
 
@@ -265,20 +258,12 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     }
 
     private fun getKeyFromMetadata(keyName: String, keys: Map<String, AttributeValue>, attributeDefinitions: List<AttributeDefinition>): Key {
-        val keyAttributeValue =
-            keys[keyName] ?: throw DynamoDbException
-                .builder()
-                .message("One of the required keys was not given a value")
-                .build()
+        val keyAttributeValue = keys[keyName] ?: throw dynamoException("One of the required keys was not given a value")
         val (keyType, key) = toKey(keyName, keyAttributeValue)
-        val expectedKeyType =
-            attributeDefinitions.firstOrNull { it.attributeName() == keyName } ?: throw DynamoDbException.builder()
-                .message("One of the required keys was not given a value")
-                .build()
-        if (expectedKeyType.attributeTypeAsString().uppercase() != keyType) {
-            throw DynamoDbException.builder()
-                .message("Invalid attribute value type")
-                .build()
+        val expectedKeyType = attributeDefinitions.firstOrNull { it.attributeName() == keyName }
+            ?: throw dynamoException("One of the required keys was not given a value")
+        dynamoRequires(expectedKeyType.attributeTypeAsString().uppercase() == keyType) {
+            "Invalid attribute value type"
         }
         return key
     }
@@ -308,7 +293,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                 }
             }
             ReturnValue.NONE, null -> null
-            else -> throw DynamoDbException.builder().message("Return values set to invalid value").build()
+            else -> throw dynamoException("Return values set to invalid value")
         }
 
 }

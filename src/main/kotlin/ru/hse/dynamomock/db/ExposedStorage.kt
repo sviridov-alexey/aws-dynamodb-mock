@@ -5,11 +5,12 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
+import ru.hse.dynamomock.exception.dynamoException
+import ru.hse.dynamomock.exception.dynamoRequires
 import ru.hse.dynamomock.model.*
 import ru.hse.dynamomock.model.Key
 import software.amazon.awssdk.services.dynamodb.model.ComparisonOperator
 import software.amazon.awssdk.services.dynamodb.model.Condition
-import software.amazon.awssdk.services.dynamodb.model.DynamoDbException
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException
 import java.security.MessageDigest
 import java.util.*
@@ -22,7 +23,7 @@ class ExposedStorage : DataStorageLayer {
 
     override fun createTable(tableMetadata: TableMetadata) {
         val name = hashTableName(tableMetadata.tableName)
-        require(name !in tables) {
+        dynamoRequires(name !in tables) {
             "Table $name already exists. Cannot create."
         }
         val table = DynamoTable(tableMetadata)
@@ -48,7 +49,7 @@ class ExposedStorage : DataStorageLayer {
 
             strs.firstNotNullOfOrNull { cond.toOp(it) }
                 ?: nums.firstNotNullOfOrNull { cond.toOp(it) }
-                ?: throw DynamoDbException.builder().message("Invalid key condition with ${name}.").build()
+                ?: throw dynamoException("Invalid key condition with ${name}.")
         }
 
         val condition: SqlExpressionBuilder.() -> Op<Boolean> = {
@@ -167,8 +168,8 @@ private inline fun <reified T : Comparable<T>> Condition.toOp(
     }
 
     val assertArgs = { size: Int ->
-        if (args.size != size) {
-            throw DynamoDbException.builder().message("Incorrect number of arguments in a key condition.").build()
+        dynamoRequires(args.size == size) {
+            "Incorrect number of arguments in a key condition."
         }
     }
 

@@ -1,9 +1,9 @@
 package ru.hse.dynamomock.model
 
 import kotlinx.serialization.Serializable
+import ru.hse.dynamomock.exception.dynamoRequires
 import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
-import software.amazon.awssdk.services.dynamodb.model.DynamoDbException
 import java.math.BigDecimal
 import java.util.*
 
@@ -81,12 +81,8 @@ data class AttributeTypeInfo(
         .nul(nul)
         .build()
 
-    private fun requireExactlyOneValue() {
-        if (notNullProperties.size != 1) {
-            throw DynamoDbException.builder().message(
-                "Supplied AttributeValue has more than one types set, must contain exactly one of the supported types"
-            ).build()
-        }
+    private fun requireExactlyOneValue() = dynamoRequires(notNullProperties.size == 1) {
+        "Supplied AttributeValue has more than one types set, must contain exactly one of the supported types"
     }
 
     val typeAsString

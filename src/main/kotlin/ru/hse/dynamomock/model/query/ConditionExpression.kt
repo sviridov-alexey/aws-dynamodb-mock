@@ -1,5 +1,7 @@
 package ru.hse.dynamomock.model.query
 
+import ru.hse.dynamomock.exception.dynamoException
+import ru.hse.dynamomock.exception.dynamoRequires
 import ru.hse.dynamomock.model.AttributeTypeInfo
 import ru.hse.dynamomock.model.query.grammar.ConditionExpressionGrammar
 import ru.hse.dynamomock.model.query.ConditionExpression.Parameter
@@ -147,10 +149,8 @@ sealed interface ConditionExpression {
         val list: List<Parameter>
     ) : ConditionExpression {
         init {
-            if (list.size > 100) {
-                throw DynamoDbException.builder()
-                    .message("List in `in` operator must contain up to 100 values.")
-                    .build()
+            dynamoRequires(list.size <= 100) {
+                "List in `in` operator must contain up to 100 values."
             }
         }
 
@@ -169,7 +169,9 @@ sealed interface ConditionExpression {
     ) : ConditionExpression {
         override fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean {
             val typeInfo = type.value.toAttributeTypeInfo()
-            require(typeInfo.typeAsString == "S")
+            dynamoRequires(typeInfo.typeAsString == "S") {
+                "Operand in 'attribute_type' must be S."
+            }
             // TODO check if there is an existent type in [type]
             return attr.retrieve(attributeValues)?.toAttributeTypeInfo()?.typeAsString == typeInfo.value
         }
@@ -182,8 +184,12 @@ sealed interface ConditionExpression {
         override fun evaluate(attributeValues: Map<String, AttributeValue>): Boolean {
             val attrTypeInfo = attr.retrieve(attributeValues)?.toAttributeTypeInfo() ?: return false
             val startTypeInfo = start.retrieve(attributeValues)?.toAttributeTypeInfo() ?: return false
-            require(attrTypeInfo.typeAsString == "S" || attrTypeInfo.typeAsString == "B")
-            require(startTypeInfo.typeAsString == "S")
+            dynamoRequires(attrTypeInfo.typeAsString == "S" || attrTypeInfo.typeAsString == "B") {
+                "Operands in 'begins_with' must be S."
+            }
+            dynamoRequires(startTypeInfo.typeAsString == "S") {
+                "Operands in 'begins_with' must be S."
+            }
             // TODO support B in [attr]
             return (attrTypeInfo.value as String).startsWith(startTypeInfo.value as String)
         }
@@ -199,7 +205,9 @@ sealed interface ConditionExpression {
             val type = attrTypeInfo.typeAsString
             return when {
                 type == "S" -> {
-                    require(operandTypeInfo.typeAsString == "S")
+                    dynamoRequires(operandTypeInfo.typeAsString == "S") {
+                        "Operand in 'contains(S, ...)' must be S."
+                    }
                     (attrTypeInfo.value as String).contains(operandTypeInfo.value as String)
                 }
                 type.length == 2 && type.endsWith('S') -> {
@@ -230,9 +238,8 @@ fun QueryRequest.retrieveKeyConditions(): Map<String, Condition> {
     return if (hasKeyConditions()) {
         keyConditions()
     } else {
-        val keyConditionExpression = keyConditionExpression() ?: throw DynamoDbException.builder()
-            .message("Nor key conditions, nor key condition expression was provided.")
-            .build()
+        val keyConditionExpression = keyConditionExpression()
+            ?: throw dynamoException("Nor key conditions, nor key condition expression was provided.")
         val conditionExpression = ConditionExpressionGrammar(expressionAttributeNames(), expressionAttributeValues())
             .parse(keyConditionExpression)
 
@@ -257,9 +264,7 @@ private fun retrieveConditionExpression(
         when (conditionalOperator) {
             ConditionalOperator.AND -> ConditionExpression.And(expr, cond)
             ConditionalOperator.OR -> ConditionExpression.Or(expr, cond)
-            else -> throw DynamoDbException.builder()
-                .message("Unknown conditional operator to combine query filter")
-                .build()
+            else -> throw dynamoException("Unknown conditional operator to combine query filter")
         }
     }
 }
@@ -268,10 +273,8 @@ private fun Condition.toConditionExpression(attribute: Parameter.Attribute): Con
     val arguments = attributeValueList().map { Parameter.Value(it) }
 
     fun assertArgs(number: Int, strict: Boolean = true) {
-        if (strict && number != arguments.size || !strict && number < arguments.size) {
-            throw DynamoDbException.builder()
-                .message("Invalid number of arguments in ${comparisonOperator()}.")
-                .build()
+        dynamoRequires(strict && number == arguments.size || !strict && number >= arguments.size) {
+            "Invalid number of arguments in ${comparisonOperator()}."
         }
     }
 
@@ -328,31 +331,25 @@ private fun Condition.toConditionExpression(attribute: Parameter.Attribute): Con
             assertArgs(1)
             ConditionExpression.BeginsWith(attribute, arguments.first())
         }
-        else -> {
-            throw DynamoDbException.builder().message("Unknown comparison operator in filter expression").build()
-        }
+        else -> throw dynamoException("Unknown comparison operator in filter expression")
     }
 }
 
-private fun QueryAttribute.toValue(): QueryAttribute.Simple.Value =
-    this as? QueryAttribute.Simple.Value ?: throw DynamoDbException.builder()
-        .message("Attribute in key comparison must have type from [N, S, B]").build()
+private fun QueryAttribute.toValue(): QueryAttribute.Simple.Value = this as? QueryAttribute.Simple.Value
+    ?: throw dynamoException("Attribute in key comparison must have type from [N, S, B]")
 
 private fun ConditionExpression.toKeyCondition(): Pair<String, Condition> = when (this) {
-    is ConditionExpression.Neq -> {
-        throw DynamoDbException.builder()
-            .message("Comparison in key condition expression cannot have <> operator.").build()
-    }
+    is ConditionExpression.Neq -> throw dynamoException(
+        "Comparison in key condition expression cannot have <> operator."
+    )
     is ConditionExpression.Comparison -> {
         val attributeParameter = leftParam as? Parameter.Attribute
             ?: rightParam as? Parameter.Attribute
-            ?: throw DynamoDbException.builder()
-                .message("Comparison in key condition expression must contain exactly one attribute.").build()
+            ?: throw dynamoException("Comparison in key condition expression must contain exactly one attribute.")
         val attribute = attributeParameter.attribute.toValue()
         val valueParameter = leftParam as? Parameter.Value
             ?: rightParam as? Parameter.Value
-            ?: throw DynamoDbException.builder()
-                .message("Comparison in key condition expression must contain exactly one value.").build()
+            ?: throw dynamoException("Comparison in key condition expression must contain exactly one value.")
 
         attribute.name to Condition.builder()
             .comparisonOperator(this::class.simpleName!!.uppercase())
@@ -361,9 +358,8 @@ private fun ConditionExpression.toKeyCondition(): Pair<String, Condition> = when
     }
     is ConditionExpression.BeginsWith -> {
         val attribute = attr.attribute.toValue()
-        val valueParameter = start as? Parameter.Value ?: throw DynamoDbException.builder()
-            .message("BeginsWith in key condition expression must have value as the second parameter.")
-            .build()
+        val valueParameter = start as? Parameter.Value
+            ?: throw dynamoException("BeginsWith in key condition expression must have value as the second parameter.")
 
         attribute.name to Condition.builder()
             .comparisonOperator(ComparisonOperator.BEGINS_WITH)
@@ -371,13 +367,13 @@ private fun ConditionExpression.toKeyCondition(): Pair<String, Condition> = when
             .build()
     }
     is ConditionExpression.Between -> {
-        val attribute = (param as? Parameter.Attribute)?.attribute?.toValue() ?: throw DynamoDbException.builder()
-            .message("Between in key condition expression must have simple attribute as the first parameter.")
-            .build()
+        val attribute = (param as? Parameter.Attribute)?.attribute?.toValue() ?: throw dynamoException(
+            "Between in key condition expression must have simple attribute as the first parameter."
+        )
         val valueParameters = listOf(leftParam, rightParam).map {
-            it as? Parameter.Value ?: throw DynamoDbException.builder()
-                .message("Between in key condition expression must have values as the second and third parameters")
-                .build()
+            it as? Parameter.Value ?: throw dynamoException(
+                "Between in key condition expression must have values as the second and third parameters"
+            )
         }
 
         attribute.name to Condition.builder()
@@ -385,5 +381,5 @@ private fun ConditionExpression.toKeyCondition(): Pair<String, Condition> = when
             .attributeValueList(valueParameters.map { it.value })
             .build()
     }
-    else -> throw DynamoDbException.builder().message("Unsupported operation in key condition expression").build()
+    else -> throw dynamoException("Unsupported operation in key condition expression")
 }
