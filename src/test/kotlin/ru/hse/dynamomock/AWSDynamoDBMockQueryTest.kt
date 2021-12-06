@@ -9,9 +9,10 @@ import software.amazon.awssdk.services.dynamodb.model.*
 import software.amazon.awssdk.services.dynamodb.model.ComparisonOperator.*
 import java.math.BigDecimal
 import java.time.Instant
+import java.util.*
+import kotlin.NoSuchElementException
 import kotlin.properties.Delegates
-import kotlin.test.assertEquals
-import kotlin.test.assertNull
+import kotlin.test.*
 
 internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     enum class AttributeType { N, S } // TODO test B
@@ -64,12 +65,16 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             assertEquals(items.size, response.count())
             assertEquals(scannedCount, response.scannedCount())
             assertEquals(items, response.items())
+            assertNotNull(response.lastEvaluatedKey())
         }
     }
 
     private data class ExpectedCount(val count: Int, val scannedCount: Int) : Expected {
         override fun assert(response: QueryResponse) {
-            assertNull(response.items())
+            assertFalse(response.hasItems())
+            assertFalse(response.hasLastEvaluatedKey())
+            assertNotNull(response.items())
+            assertNotNull(response.lastEvaluatedKey())
             assertEquals(count, response.count())
             assertEquals(scannedCount, response.scannedCount())
         }
@@ -110,6 +115,8 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
         attributesToGet: List<String>? = null,
         select: Select? = null,
         scanIndexForward: Boolean? = null,
+        limit: Int? = null,
+        exclusiveStartKey: Map<String, AttributeValue>? = null,
         expressionAttributeNames: Map<String, String> = emptyMap(),
         expressionAttributeValues: Map<String, AttributeValue> = emptyMap(),
     ): QueryRequest {
@@ -126,6 +133,8 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
         attributesToGet?.let { builder.attributesToGet(it) }
         select?.let { builder.select(it) }
         scanIndexForward?.let { builder.scanIndexForward(it) }
+        limit?.let { builder.limit(it) }
+        exclusiveStartKey?.let { builder.exclusiveStartKey(it) }
 
         return builder.build()
     }
@@ -811,6 +820,57 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
+    fun `test limit, exclusive start key and last evaluated key`() {
+        val tableName = "table"
+        val partKey = "part"
+        val sortKey = "sort"
+        val items = (0..100).shuffled(Random(100)).map {
+            mutableMapOf(partKey to atS("val"), sortKey to atN(it.toString())).apply {
+                if (it % 3 == 0) {
+                    this += "kek" to atS("wow")
+                }
+            }.toMap()
+        }
+        val expectedItems = items.filter { "kek" !in it }.sortedBy { it.getValue(sortKey).n().toBigDecimal() }
+        val metadata = TableMetadata(
+            tableName = tableName,
+            attributeDefinitions = listOf(
+                AttributeDefinition.builder().attributeType("S").attributeName(partKey).build(),
+                AttributeDefinition.builder().attributeType("N").attributeName(sortKey).build()
+            ),
+            partitionKey = partKey,
+            sortKey = sortKey,
+            tableStatus = TableStatus.ACTIVE,
+            creationDateTime = Instant.now()
+        )
+
+        mock.createTable(metadata.toCreateTableRequest())
+        items.forEach { mock.putItem(putItemRequestBuilder(tableName, it)) }
+
+        val limit = 7
+        var exclusiveStartKey: Map<String, AttributeValue>? = null
+        val result = mutableListOf<Map<String, AttributeValue>>()
+        while (result.size < expectedItems.size) {
+            val response = mock.query(query(
+                tableName = tableName,
+                keyConditionExpression = "$partKey = :v",
+                filterExpression = "attribute_not_exists(kek)",
+                expressionAttributeValues = mapOf(":v" to atS("val")),
+                limit = limit,
+                exclusiveStartKey = exclusiveStartKey
+            ))
+            assertTrue(response.hasItems())
+            assertTrue(response.count() <= response.scannedCount())
+            assertEquals(response.count(), response.items().size)
+            assertTrue(response.count() in 1..limit)
+            result += response.items()
+            exclusiveStartKey = response.lastEvaluatedKey().takeIf { response.hasLastEvaluatedKey() }
+        }
+
+        assertEquals(expectedItems, result)
+    }
+
+    @Test
     fun `test fail non existent table`() = failed<IllegalArgumentException> {
         query = query(
             tableName = "non-existent",
@@ -982,6 +1042,26 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             filterExpression = "a = :a",
             expressionAttributeValues = mapOf(":v" to atS("a"))
         )
+    }
+
+    @Test
+    fun `test fail invalid limit`() {
+        failed<IllegalArgumentException> { // TODO
+            query = query(
+                tableName = tableName,
+                keyConditionExpression = "$partKey = :v",
+                expressionAttributeValues = mapOf(":v" to atS("val")),
+                limit = 0
+            )
+        }
+        failed<IllegalArgumentException> { // TODO
+            query = query(
+                tableName = tableName,
+                keyConditionExpression = "$partKey = :v",
+                expressionAttributeValues = mapOf(":v" to atS("val")),
+                limit = -10
+            )
+        }
     }
 }
 

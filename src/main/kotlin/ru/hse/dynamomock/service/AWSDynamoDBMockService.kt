@@ -5,6 +5,7 @@ import ru.hse.dynamomock.model.*
 import ru.hse.dynamomock.model.query.retrieveAttributesTransformer
 import ru.hse.dynamomock.model.query.retrieveFilterExpression
 import ru.hse.dynamomock.model.query.retrieveKeyConditions
+import software.amazon.awssdk.core.util.DefaultSdkAutoConstructMap
 import software.amazon.awssdk.services.dynamodb.model.*
 import java.util.*
 
@@ -49,9 +50,11 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         return tablesMetadata.getValue(name).toTableDescription()
     }
 
-    // TODO support exclusiveStartKey and limit
     // TODO take into account that it's impossible to use expression-like and not-expression-like at the same query
     fun query(request: QueryRequest): QueryResponse {
+        require(request.limit() == null || request.limit() > 0) {
+            "Limit must be >= 1."
+        }
         require(request.indexName() == null) {
             "Indexes are not supported in query yet."
         }
@@ -69,6 +72,16 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             if (request.scanIndexForward() != false) it else it.reversed()
         }.map { item ->
             item.associate { it.name to it.type.toAttributeValue() }
+        }.let { items ->
+            request.exclusiveStartKey().takeIf { request.hasExclusiveStartKey() }?.let { exclusiveStartKey ->
+                val sortKey = exclusiveStartKey[table.sortKey]
+                items.asSequence()
+                    .dropWhile { it[table.sortKey] != sortKey }
+                    .drop(1)
+                    .toList()
+            } ?: items
+        }.let { items ->
+            request.limit()?.let { items.take(it) } ?: items
         }
 
         val filterExpression = request.retrieveFilterExpression()
@@ -86,9 +99,17 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             .count(filteredItems.size)
             .scannedCount(items.size)
 
+        if (items.size == request.limit()) {
+            responseBuilder.lastEvaluatedKey(items.last())
+        } else {
+            responseBuilder.lastEvaluatedKey(DefaultSdkAutoConstructMap.getInstance())
+        }
+
         val transformer = request.retrieveAttributesTransformer()
         if (request.select() != Select.COUNT) {
             responseBuilder.items(filteredItems.map(transformer))
+        } else {
+            responseBuilder.items(DefaultSdkAutoConstructMap.getInstance())
         }
         return responseBuilder.build()
     }
