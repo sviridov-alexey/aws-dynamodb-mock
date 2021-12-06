@@ -1,6 +1,7 @@
 package ru.hse.dynamomock
 
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import ru.hse.dynamomock.model.TableMetadata
 import ru.hse.dynamomock.model.query.grammar.*
 import ru.hse.dynamomock.model.toAttributeTypeInfo
@@ -74,11 +75,26 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
         }
     }
 
-    private fun test(autoRun: Boolean = true, block: InsideTest.() -> Unit) {
+    private object EmptyExpected : Expected {
+        override fun assert(response: QueryResponse) = Unit
+    }
+
+    private inline fun test(autoRun: Boolean = true, block: InsideTest.() -> Unit) {
         InsideTest().apply {
             block()
             if (autoRun) {
                 test()
+            }
+        }
+    }
+
+    private inline fun <reified T : Exception> failed(block: InsideTest.() -> Unit) {
+        assertThrows<T> {
+            test {
+                partKeyType = AttributeType.S
+                items = listOf()
+                expected = EmptyExpected
+                block()
             }
         }
     }
@@ -792,6 +808,180 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             select = Select.COUNT
         )
         expected = ExpectedCount(count = 2, scannedCount = 2)
+    }
+
+    @Test
+    fun `test fail non existent table`() = failed<IllegalArgumentException> {
+        query = query(
+            tableName = "non-existent",
+            keyConditionExpression = "$partKey = :v",
+            expressionAttributeValues = mapOf(":v" to atS("a"))
+        )
+    }
+
+    @Test
+    fun `test fail select and attributes to get`() {
+        failed<DynamoDbException> {
+            query = query(
+                tableName = tableName,
+                keyConditions = mapOf(partKey to condition(listOf(atS("a")), EQ)),
+                attributesToGet = listOf("a"),
+                select = Select.ALL_ATTRIBUTES
+            )
+        }
+        failed<DynamoDbException> {
+            query = query(
+                tableName = tableName,
+                keyConditions = mapOf(partKey to condition(listOf(atS("a")), EQ)),
+                attributesToGet = listOf("a"),
+                select = Select.COUNT
+            )
+        }
+    }
+
+    @Test
+    fun `test fail select and projection expression`() {
+        failed<DynamoDbException> {
+            query = query(
+                tableName = tableName,
+                keyConditionExpression = "$partKey = :v",
+                expressionAttributeValues = mapOf(":v" to atS("a")),
+                projectionExpression = "a",
+                select = Select.ALL_ATTRIBUTES
+            )
+        }
+        failed<DynamoDbException> {
+            query = query(
+                tableName = tableName,
+                keyConditionExpression = "$partKey = :v",
+                expressionAttributeValues = mapOf(":v" to atS("a")),
+                projectionExpression = "a",
+                select = Select.COUNT
+            )
+        }
+    }
+
+    @Test
+    fun `test fail same in attributes to get`() {
+        failed<DynamoDbException> {
+            query = query(
+                tableName = tableName,
+                keyConditions = mapOf(partKey to condition(listOf(atS("a")), EQ)),
+                attributesToGet = listOf("a", "a")
+            )
+        }
+    }
+
+    @Test
+    fun `test fail attributes to get and projection expression at the same time`() = failed<DynamoDbException> {
+        query = query(
+            tableName = tableName,
+            keyConditions = mapOf(partKey to condition(listOf(atS("a")), EQ)),
+            attributesToGet = listOf("a"),
+            projectionExpression = "a"
+        )
+    }
+
+    @Test
+    fun `test fail key conditions no partition key`() {
+        failed<DynamoDbException> {
+            sortKeyType = AttributeType.S
+            query = query(
+                tableName = tableName,
+                keyConditions = mapOf(sortKey to condition(listOf(atS("a")), EQ))
+            )
+        }
+        failed<DynamoDbException> {
+            sortKeyType = AttributeType.S
+            query = query(
+                tableName = tableName,
+                keyConditionExpression = "$sortKey = :v",
+                expressionAttributeValues = mapOf(":v" to atS("a"))
+            )
+        }
+    }
+
+    @Test
+    fun `test fail key conditions extra attribute`() = failed<DynamoDbException> {
+        query = query(
+            tableName = tableName,
+            keyConditions = mapOf(partKey to condition(listOf(atS("a")), EQ), "a" to condition(listOf(atS("a")), EQ))
+        )
+    }
+
+    @Test
+    fun `test fail key conditions invalid number of arguments`() = failed<DynamoDbException> {
+        query = query(
+            tableName = tableName,
+            keyConditions = mapOf(partKey to condition(listOf(atS("a"), atS("b")), EQ))
+        )
+    }
+
+    @Test
+    fun `test fail key conditions not eq on partition key`() {
+        failed<DynamoDbException> {
+            query = query(
+                tableName = tableName,
+                keyConditions = mapOf(partKey to condition(listOf(atS("a")), LE))
+            )
+        }
+        failed<DynamoDbException> {
+            query = query(
+                tableName = tableName,
+                keyConditionExpression = "$partKey <= :v",
+                expressionAttributeValues = mapOf(":v" to atS("a"))
+            )
+        }
+    }
+
+    @Test
+    fun `test fail key conditions invalid operation on sort key`() {
+        failed<DynamoDbException> {
+            sortKeyType = AttributeType.N
+            query = query(
+                tableName = tableName,
+                keyConditions = mapOf(
+                    partKey to condition(listOf(atS("a")), EQ),
+                    sortKey to condition(listOf(), NOT_NULL)
+                )
+            )
+        }
+        failed<DynamoDbException> {
+            sortKeyType = AttributeType.N
+            query = query(
+                tableName = tableName,
+                keyConditionExpression = "$partKey = :a and attribute_exists ($sortKey)",
+                expressionAttributeValues = mapOf(":a" to atS("a"))
+            )
+        }
+    }
+
+    @Test
+    fun `test fail key condition expression not and`() = failed<DynamoDbException> {
+        sortKeyType = AttributeType.S
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = "$partKey = :a or $sortKey = :b",
+            expressionAttributeValues = mapOf(":a" to atS("a"), ":b" to atS("b"))
+        )
+    }
+
+    @Test
+    fun `test fail key condition expression uses non-existent value`() = failed<NoSuchElementException> { // TODO
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = "$partKey = :v"
+        )
+    }
+
+    @Test
+    fun `test fail filter expression uses non-existent value`() = failed<NoSuchElementException> { // TODO
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = "$partKey = :v",
+            filterExpression = "a = :a",
+            expressionAttributeValues = mapOf(":v" to atS("a"))
+        )
     }
 }
 

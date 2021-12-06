@@ -54,6 +54,12 @@ fun QueryRequest.retrieveAttributesTransformer(): (Map<String, AttributeValue>) 
         throw DynamoDbException.builder().message("Unknown Select in query.").build()
     }
 
+    if (attributesToGet != null && projectionExpression != null) {
+        throw DynamoDbException.builder()
+            .message("Cannot specify AttributesToGet and ProjectionExpression at the same time.")
+            .build()
+    }
+
     // TODO take into account overlapped paths in projection
     when {
         projectionExpression != null -> {
@@ -70,8 +76,13 @@ fun QueryRequest.retrieveAttributesTransformer(): (Map<String, AttributeValue>) 
                 }.distinctBy { it.first }.toMap()
             }
         }
-        attributesToGet != null -> return { items ->
-            attributesToGet.mapNotNull { if (it in items) it to items.getValue(it) else null }.toMap()
+        attributesToGet != null -> {
+            if (attributesToGet != attributesToGet.distinct()) {
+                throw DynamoDbException.builder().message("AttributesToGet contain two identical attributes.").build()
+            }
+            return { items ->
+                attributesToGet.mapNotNull { if (it in items) it to items.getValue(it) else null }.toMap()
+            }
         }
         select() == null -> return { it }
         else -> throw DynamoDbException.builder()
