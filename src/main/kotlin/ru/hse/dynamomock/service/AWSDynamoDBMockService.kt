@@ -61,13 +61,25 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         require(request.consistentRead() != false) {
             "Non-consistent read is not supported in query yet."
         }
+
         val tableName = request.tableName()
         require(tableName in tablesMetadata) {
             "Cannot query from non-existent table $tableName."
         }
-        val table = tablesMetadata.getValue(tableName)
 
+        val table = tablesMetadata.getValue(tableName)
         val keyConditions = request.retrieveKeyConditions()
+        keyConditions[table.partitionKey].let {
+            if (it == null || it.comparisonOperator() != ComparisonOperator.EQ) {
+                throw DynamoDbException.builder().message("Partition key must use '=' operator.").build()
+            }
+        }
+        if (keyConditions.size > 2 || keyConditions.size == 2 && table.sortKey !in keyConditions) {
+            throw DynamoDbException.builder() // TODO not forget to add indexes
+                .message("Only partition and sort keys can be used in key conditions.")
+                .build()
+        }
+
         val items = storage.query(tableName, keyConditions).let {
             if (request.scanIndexForward() != false) it else it.reversed()
         }.map { item ->

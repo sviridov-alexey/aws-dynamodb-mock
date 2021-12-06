@@ -38,18 +38,6 @@ class ExposedStorage : DataStorageLayer {
 
     override fun query(tableName: String, keyConditions: Map<String, Condition>): List<List<AttributeInfo>> {
         val table = getTable(tableName)
-        keyConditions[table.partitionKeyName].let {
-            if (it == null || it.comparisonOperator() != ComparisonOperator.EQ) {
-                throw DynamoDbException.builder().message("Partition key must use '=' operator.").build()
-            }
-        }
-        if (keyConditions.size > 2 || keyConditions.size == 2 && table.sortKeyName !in keyConditions) {
-            throw DynamoDbException.builder() // TODO not forget to add indexes
-                .message("Only partition and sort keys can be used in key conditions.")
-                .build()
-        }
-
-        @Suppress("UNCHECKED_CAST")
         val keys = keyConditions.map { (name, cond) ->
             val strs = listOf(
                 table.partitionKeyName to table.stringPartitionKey, table.sortKeyName to table.stringSortKey
