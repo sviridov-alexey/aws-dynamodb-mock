@@ -31,11 +31,11 @@ internal class AWSDynamoDBMockDDLTest : AWSDynamoDBMockTest() {
         for ((i, metadata) in metadataPool.dropLast(1).withIndex()) {
             val request = metadata.toCreateTableRequest()
             mock.createTable(request)
-            assertThrows<IllegalArgumentException> {
+            assertThrows<DynamoDbException> {
                 mock.createTable(request)
             }
             val request2 = metadataPool[i + 1].toCreateTableRequest().toBuilder().tableName(request.tableName()).build()
-            assertThrows<IllegalArgumentException> {
+            assertThrows<DynamoDbException> {
                 mock.createTable(request2)
             }
         }
@@ -58,7 +58,7 @@ internal class AWSDynamoDBMockDDLTest : AWSDynamoDBMockTest() {
     @Test
     fun `test drop non-existent table`() {
         val request = metadataPool.last().toDeleteTableRequest()
-        assertThrows<IllegalArgumentException> {
+        assertThrows<DynamoDbException> {
             mock.deleteTable(request)
         }
     }
@@ -70,7 +70,7 @@ internal class AWSDynamoDBMockDDLTest : AWSDynamoDBMockTest() {
         }
         val deleteRequest = metadataPool[7].toDeleteTableRequest()
         mock.deleteTable(deleteRequest)
-        assertThrows<IllegalArgumentException> {
+        assertThrows<DynamoDbException> {
             mock.deleteTable(deleteRequest)
         }
     }
@@ -88,7 +88,7 @@ internal class AWSDynamoDBMockDDLTest : AWSDynamoDBMockTest() {
         for (metadata in metadataPool.drop(1)) {
             mock.createTable(metadata.toCreateTableRequest())
         }
-        assertThrows<IllegalArgumentException> {
+        assertThrows<DynamoDbException> {
             mock.describeTable(metadataPool.first().toDescribeTableRequest())
         }
     }

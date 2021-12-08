@@ -1,11 +1,8 @@
 package ru.hse.dynamomock.db
 
 
-import ru.hse.dynamomock.model.AttributeInfo
-import ru.hse.dynamomock.model.DBDeleteItemRequest
-import ru.hse.dynamomock.model.DBGetItemRequest
-import ru.hse.dynamomock.model.DBPutItemRequest
-import ru.hse.dynamomock.model.TableMetadata
+import ru.hse.dynamomock.model.*
+import software.amazon.awssdk.services.dynamodb.model.Condition
 
 interface DataStorageLayer {
     fun createTable(tableMetadata: TableMetadata)
@@ -19,6 +16,8 @@ interface DataStorageLayer {
     fun deleteItem(request: DBDeleteItemRequest)
 
     fun updateItem(request: DBPutItemRequest)
+
+    fun query(tableName: String, keyConditions: Map<String, Condition>): List<List<AttributeInfo>>
 
     // TODO support other queries
 }
