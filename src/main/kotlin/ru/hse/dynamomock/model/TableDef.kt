@@ -58,12 +58,12 @@ private fun checkLocalSecondaryIndexes(indexes: List<LocalSecondaryIndex>, table
                 .message("Two local secondary indices have the same name")
                 .build()
         }
-        indexesNames.add(name)
-        if (name == null || (name.length !in 3..255 && name.matches("[a-zA-Z0-9-_.]+".toRegex()))) {
+        if (name == null || !(name.length in 3..255 && name.matches("[a-zA-Z0-9-_.]+".toRegex()))) {
             throw DynamoDbException.builder()
-                .message(
-                    "Invalid table/index name.  Table/index names must be between 3 and 255 characters long," +
-                        "and may contain only the characters a-z, A-Z, 0-9, '_', '-', and '.'"
+                .message("""
+                    Invalid table/index name.  Table/index names must be between 3 and 255 characters long, 
+                    and may contain only the characters a-z, A-Z, 0-9, '_', '-', and '.
+                """.trimIndent()
                 )
                 .build()
         }
@@ -86,7 +86,9 @@ private fun checkLocalSecondaryIndexes(indexes: List<LocalSecondaryIndex>, table
             throw DynamoDbException.builder()
                 .message("Local Secondary indices must have the same hash key as the main table")
                 .build()
+
         }
+        indexesNames.add(name)
     }
     return indexes
 }

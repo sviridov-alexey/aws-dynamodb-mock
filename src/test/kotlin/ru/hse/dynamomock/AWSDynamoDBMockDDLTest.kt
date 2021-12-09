@@ -1,5 +1,8 @@
 package ru.hse.dynamomock
 
+import assertk.assertThat
+import assertk.assertions.hasMessage
+import assertk.assertions.isFailure
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -91,5 +94,54 @@ internal class AWSDynamoDBMockDDLTest : AWSDynamoDBMockTest() {
         assertThrows<DynamoDbException> {
             mock.describeTable(metadataPool.first().toDescribeTableRequest())
         }
+    }
+
+    @Test
+    fun `test more indexes than it should be`() {
+        assertThat {
+            mock.createTable(createTableMetadata("testTable", 0, 1, Instant.now(), 3).toCreateTableRequest())
+        }.isFailure().hasMessage("Cannot have more than 5 local secondary indexes per table")
+    }
+
+    @Test
+    fun `test same indices name`() {
+        assertThat {
+            mock.createTable(createTableMetadata("testTable", 0, 1, Instant.now(), 4).toCreateTableRequest())
+        }.isFailure().hasMessage("Two local secondary indices have the same name")
+    }
+
+    @Test
+    fun `test wrong index name`() {
+        assertThat {
+            mock.createTable(createTableMetadata("testTable", 0, 1, Instant.now(), 5).toCreateTableRequest())
+        }.isFailure().hasMessage(
+            """
+                Invalid table/index name.  Table/index names must be between 3 and 255 characters long, 
+                and may contain only the characters a-z, A-Z, 0-9, '_', '-', and '.
+            """.trimIndent()
+        )
+
+        assertThat {
+            mock.createTable(createTableMetadata("testTable", 0, 1, Instant.now(), 6).toCreateTableRequest())
+        }.isFailure().hasMessage(
+            """
+                Invalid table/index name.  Table/index names must be between 3 and 255 characters long, 
+                and may contain only the characters a-z, A-Z, 0-9, '_', '-', and '.
+            """.trimIndent()
+        )
+    }
+
+    @Test
+    fun `test no projection in index`() {
+        assertThat {
+            mock.createTable(createTableMetadata("testTable", 0, 1, Instant.now(), 7).toCreateTableRequest())
+        }.isFailure().hasMessage("Indexes must have a projection specified")
+    }
+
+    @Test
+    fun `test no keySchema in index`() {
+        assertThat {
+            mock.createTable(createTableMetadata("testTable", 0, 1, Instant.now(), 8).toCreateTableRequest())
+        }.isFailure().hasMessage("No defined key schema.  A key schema containing at least a hash key must be defined for all tables")
     }
 }

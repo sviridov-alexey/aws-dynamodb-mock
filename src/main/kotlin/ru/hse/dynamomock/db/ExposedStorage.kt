@@ -152,9 +152,6 @@ class ExposedStorage : DataStorageLayer {
         val stringLSIKeys = metadata.localSecondaryIndexes?.mapIndexed{i, _ -> text("stringLSISortKey$i").nullable().default(null)  }
         val numLSIKeys = metadata.localSecondaryIndexes?.mapIndexed{i, _ -> decimal("numLSISortKey$i", 20, 0).nullable().default(null)  }
 
-        // storing attributes for all lsi
-        val lsiAttributes = metadata.localSecondaryIndexes?.mapIndexed{i, _ -> text("attributes$i")}
-
         override val primaryKey: PrimaryKey = PrimaryKey(id)
 
         val partitionKeyName = metadata.partitionKey
