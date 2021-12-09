@@ -133,16 +133,17 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
         val itemsList = request.item().map { (k, v) -> AttributeInfo(k, v.toAttributeTypeInfo()) }
 
-        val attributes = getAttributesFromReturnValues(
-            request.returnValues(),
-            DBGetItemRequest(tableName, partitionKey, sortKey)
-        )
+        val previousItem = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))?.associate {
+            it.name to it.type.toAttributeValue()
+        }
 
-        if (attributes != null) {
+        if (previousItem != null) {
             storage.updateItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
         } else {
             storage.putItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
         }
+
+        val attributes = getAttributesFromReturnValues(request.returnValues(), previousItem)
 
         return PutItemResponse.builder()
             .attributes(attributes)
@@ -168,12 +169,15 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         val tableName = request.tableName()
         val (partitionKey, sortKey) = getRequestMetadata(tableName, request.key())
 
-        val attributes = getAttributesFromReturnValues(
-            request.returnValues(),
-            DBGetItemRequest(tableName, partitionKey, sortKey)
-        )
+        val previousItem = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))?.associate {
+            it.name to it.type.toAttributeValue()
+        }
 
-        storage.deleteItem(DBDeleteItemRequest(tableName, partitionKey, sortKey))
+        if (previousItem != null) {
+            storage.deleteItem(DBDeleteItemRequest(tableName, partitionKey, sortKey))
+        }
+
+        val attributes = getAttributesFromReturnValues(request.returnValues(), previousItem)
 
         return DeleteItemResponse.builder()
             .attributes(attributes)
@@ -241,14 +245,15 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         }
 
         putItemRequests.forEach{
-            val attributes = getAttributesFromReturnValues(
-                ReturnValue.ALL_OLD,
-                DBGetItemRequest(it.tableName, it.partitionKey, it.sortKey)
-            )
-            if (attributes == null) {
-                storage.putItem(it)
-            } else {
+            val previousItem =
+                storage.getItem(DBGetItemRequest(it.tableName, it.partitionKey, it.sortKey))?.associate { v ->
+                    v.name to v.type.toAttributeValue()
+                }
+
+            if (previousItem != null) {
                 storage.updateItem(it)
+            } else {
+                storage.putItem(it)
             }
         }
         deleteItemRequests.forEach{ storage.deleteItem(it) }
@@ -285,15 +290,10 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             getSortKeyFromMetadata(tableMetadata.sortKey, keys, tableMetadata.attributeDefinitions)
     }
 
-    private fun getAttributesFromReturnValues(returnValues: ReturnValue?, request: DBGetItemRequest): Map<String, AttributeValue>? =
+    private fun getAttributesFromReturnValues(returnValues: ReturnValue?, prevItem:  Map<String, AttributeValue>?): Map<String, AttributeValue>? =
         when (returnValues) {
-            ReturnValue.ALL_OLD -> {
-                storage.getItem(request)?.associate {
-                    it.name to it.type.toAttributeValue()
-                }
-            }
+            ReturnValue.ALL_OLD -> prevItem
             ReturnValue.NONE, null -> null
             else -> throw dynamoException("Return values set to invalid value")
         }
-
 }

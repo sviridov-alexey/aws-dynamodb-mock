@@ -45,6 +45,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
                 partitionKey = partKey,
                 sortKey = sortKeyType?.let { sortKey },
                 tableStatus = TableStatus.ACTIVE,
+                localSecondaryIndexes = null,
                 creationDateTime = Instant.now()
             )
 
@@ -841,6 +842,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             partitionKey = partKey,
             sortKey = sortKey,
             tableStatus = TableStatus.ACTIVE,
+            localSecondaryIndexes = null,
             creationDateTime = Instant.now()
         )
 
