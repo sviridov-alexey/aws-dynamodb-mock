@@ -93,103 +93,45 @@ internal open class AWSDynamoDBMockTest {
                     .keyType(KeyType.RANGE).build()
             )
 
+        private fun buildLocalSecondaryIndex(
+            indexName: String?, projectionType: ProjectionType,
+            partitionKeyIndex: Int, lsiIndex: Int) =
+            LocalSecondaryIndex.builder()
+            .indexName(indexName)
+            .projection(Projection.builder().projectionType(projectionType).build())
+            .keySchema(getKeySchemaElements(partitionKeyIndex, lsiIndex))
+            .build()
+
         @JvmStatic
         protected fun localSecondaryIndexesPool(partitionKeyIndex: Int) = listOf(
-            listOf(LocalSecondaryIndex.builder()
-                .indexName("cooold")
-                .projection(Projection.builder().projectionType(ProjectionType.ALL).build())
-                .keySchema(getKeySchemaElements(partitionKeyIndex, 1))
-                .build()),
-            listOf(LocalSecondaryIndex.builder()
-                .indexName("sweaterweather")
-                .projection(Projection.builder().projectionType(ProjectionType.ALL).build())
-                .keySchema(getKeySchemaElements(partitionKeyIndex, 1))
-                .build(),
-                LocalSecondaryIndex.builder()
-                    .indexName("coldplay")
-                    .projection(Projection.builder().projectionType(ProjectionType.KEYS_ONLY).build())
-                    .keySchema(getKeySchemaElements(partitionKeyIndex, 4))
-                    .build()
+            listOf(buildLocalSecondaryIndex("cooold", ProjectionType.ALL, partitionKeyIndex, 1)),
+            listOf(
+                buildLocalSecondaryIndex("sweaterweather", ProjectionType.ALL, partitionKeyIndex, 1),
+                buildLocalSecondaryIndex("coldplay", ProjectionType.KEYS_ONLY, partitionKeyIndex, 4),
             ),
             listOf(
-                LocalSecondaryIndex.builder()
-                    .indexName("everyminute")
-                    .projection(Projection.builder().projectionType(ProjectionType.ALL).build())
-                    .keySchema(getKeySchemaElements(partitionKeyIndex, 8))
-                    .build(),
-                LocalSecondaryIndex.builder()
-                    .indexName("and")
-                    .projection(Projection.builder().projectionType(ProjectionType.KEYS_ONLY).build())
-                    .keySchema(getKeySchemaElements(partitionKeyIndex, 6))
-                    .build(),
-                LocalSecondaryIndex.builder()
-                    .indexName("everyhour")
-                    .projection(Projection.builder().projectionType(ProjectionType.INCLUDE).build())
-                    .keySchema(getKeySchemaElements(partitionKeyIndex, 5))
-                    .build(),
-                LocalSecondaryIndex.builder()
-                    .indexName("imisssu")
-                    .projection(Projection.builder().projectionType(ProjectionType.ALL).build())
-                    .keySchema(getKeySchemaElements(partitionKeyIndex, 0))
-                    .build()
+                buildLocalSecondaryIndex("everyminute", ProjectionType.ALL, partitionKeyIndex, 8),
+                buildLocalSecondaryIndex("and", ProjectionType.KEYS_ONLY, partitionKeyIndex, 6),
+                buildLocalSecondaryIndex("everyhour", ProjectionType.INCLUDE, partitionKeyIndex, 5),
+                buildLocalSecondaryIndex("imisssu", ProjectionType.ALL, partitionKeyIndex, 0)
             ),
             listOf(
-                LocalSecondaryIndex.builder()
-                    .indexName("1")
-                    .projection(Projection.builder().projectionType(ProjectionType.KEYS_ONLY).build())
-                    .keySchema(getKeySchemaElements(partitionKeyIndex, 9))
-                    .build(),
-                LocalSecondaryIndex.builder()
-                    .indexName("2")
-                    .projection(Projection.builder().projectionType(ProjectionType.KEYS_ONLY).build())
-                    .keySchema(getKeySchemaElements(partitionKeyIndex, 6))
-                    .build(),
-                LocalSecondaryIndex.builder()
-                    .indexName("3")
-                    .projection(Projection.builder().projectionType(ProjectionType.INCLUDE).build())
-                    .keySchema(getKeySchemaElements(partitionKeyIndex, 5))
-                    .build(),
-                LocalSecondaryIndex.builder()
-                    .indexName("4")
-                    .projection(Projection.builder().projectionType(ProjectionType.ALL).build())
-                    .keySchema(getKeySchemaElements(partitionKeyIndex, 0))
-                    .build(),
-                LocalSecondaryIndex.builder()
-                    .indexName("5")
-                    .projection(Projection.builder().projectionType(ProjectionType.KEYS_ONLY).build())
-                    .keySchema(getKeySchemaElements(partitionKeyIndex, 9))
-                    .build(),
-                LocalSecondaryIndex.builder()
-                    .indexName("6")
-                    .projection(Projection.builder().projectionType(ProjectionType.KEYS_ONLY).build())
-                    .keySchema(getKeySchemaElements(partitionKeyIndex, 9))
-                    .build()
+                buildLocalSecondaryIndex("1", ProjectionType.KEYS_ONLY, partitionKeyIndex, 9),
+                buildLocalSecondaryIndex("2", ProjectionType.KEYS_ONLY, partitionKeyIndex, 6),
+                buildLocalSecondaryIndex("3", ProjectionType.INCLUDE, partitionKeyIndex, 5),
+                buildLocalSecondaryIndex("4", ProjectionType.ALL, partitionKeyIndex, 0),
+                buildLocalSecondaryIndex("5", ProjectionType.KEYS_ONLY, partitionKeyIndex, 9),
+                buildLocalSecondaryIndex("6", ProjectionType.KEYS_ONLY, partitionKeyIndex, 9)
             ),
             listOf(
-                LocalSecondaryIndex.builder()
-                    .indexName("sameTableName")
-                    .projection(Projection.builder().projectionType(ProjectionType.KEYS_ONLY).build())
-                    .keySchema(getKeySchemaElements(partitionKeyIndex, 9))
-                    .build(),
-                LocalSecondaryIndex.builder()
-                    .indexName("sameTableName")
-                    .projection(Projection.builder().projectionType(ProjectionType.KEYS_ONLY).build())
-                    .keySchema(getKeySchemaElements(partitionKeyIndex, 6))
-                    .build()
+                buildLocalSecondaryIndex("sameTableName", ProjectionType.KEYS_ONLY, partitionKeyIndex, 9),
+                buildLocalSecondaryIndex("sameTableName", ProjectionType.KEYS_ONLY, partitionKeyIndex, 6)
             ),
             listOf(
-                LocalSecondaryIndex.builder()
-                    .indexName("wrongIndexName,,,,,:)")
-                    .projection(Projection.builder().projectionType(ProjectionType.KEYS_ONLY).build())
-                    .keySchema(getKeySchemaElements(partitionKeyIndex, 9))
-                    .build()
+                buildLocalSecondaryIndex("wrongIndexName,,,,,:)", ProjectionType.KEYS_ONLY, partitionKeyIndex, 9)
             ),
             listOf(
-                LocalSecondaryIndex.builder()
-                    .indexName(null)
-                    .projection(Projection.builder().projectionType(ProjectionType.KEYS_ONLY).build())
-                    .keySchema(getKeySchemaElements(partitionKeyIndex, 9))
-                    .build()
+                buildLocalSecondaryIndex(null, ProjectionType.KEYS_ONLY, partitionKeyIndex, 9)
             ),
             listOf(
                 LocalSecondaryIndex.builder()
@@ -204,7 +146,6 @@ internal open class AWSDynamoDBMockTest {
                     .build()
             )
         )
-
 
         @JvmStatic
         protected fun createTableMetadata(
@@ -222,7 +163,7 @@ internal open class AWSDynamoDBMockTest {
             attributeDefinitionPool[partitionKeyIndex].attributeName(),
             sortKeyIndex?.let { attributeDefinitionPool[it].attributeName() },
             TableStatus.ACTIVE,
-            lsiIndex?.let{localSecondaryIndexesPool(partitionKeyIndex)[lsiIndex]},
+            lsiIndex?.let{localSecondaryIndexesPool(partitionKeyIndex)[lsiIndex]} ?: emptyList(),
             creationDateTime
         )
 
