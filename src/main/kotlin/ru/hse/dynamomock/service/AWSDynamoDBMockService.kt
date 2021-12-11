@@ -19,13 +19,13 @@ import software.amazon.awssdk.core.util.DefaultSdkAutoConstructMap
 class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     private val tablesMetadata = mutableMapOf<String, TableMetadata>()
 
-    private fun toKey(keyName: String, attributeValue: AttributeValue): Pair<String, Key> =
+    private fun toKey(keyName: String, attributeValue: AttributeValue): Pair<DynamoType, Key> =
         if (attributeValue.s() != null) {
-            "S" to StringKey(keyName, attributeValue.s())
+            DynamoType.S to StringKey(keyName, attributeValue.s())
         } else if (attributeValue.n() != null) {
-            "N" to NumKey(keyName, attributeValue.n().toBigDecimal())
+            DynamoType.N to NumKey(keyName, attributeValue.n().toBigDecimal())
         } else if (attributeValue.b() != null) {
-            "B" to StringKey(keyName, Base64.getEncoder().encodeToString(attributeValue.b().asByteArray()))
+            DynamoType.B to StringKey(keyName, Base64.getEncoder().encodeToString(attributeValue.b().asByteArray()))
         } else {
             throw dynamoException("Member must satisfy enum value set: [B, N, S]")
         }
@@ -339,7 +339,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         val (keyType, key) = toKey(keyName, keyAttributeValue)
         val expectedKeyType = attributeDefinitions.firstOrNull { it.attributeName() == keyName }
             ?: throw dynamoException("One of the required keys was not given a value")
-        dynamoRequires(expectedKeyType.attributeTypeAsString().uppercase() == keyType) {
+        dynamoRequires(expectedKeyType.attributeTypeAsString().uppercase() == keyType.name) {
             "Invalid attribute value type"
         }
         return key
