@@ -53,8 +53,8 @@ class AWSDynamoDBMock : DynamoDbClient {
         return service.batchWriteItem(batchWriteItemRequest)
     }
 
-    fun scanItemsFromCSV(fileName: String, tableName: String) {
-        service.scanItems(fileName, tableName)
+    fun loadCSV(fileName: String, tableName: String) {
+        service.loadCSV(fileName, tableName)
     }
 
     companion object {

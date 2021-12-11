@@ -11,38 +11,28 @@ import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement
 import kotlin.test.assertEquals
 
-internal class AWSDynamoDBMockScanItemsTest : AWSDynamoDBMockTest() {
+internal class AWSDynamoDBMockLoadCSVTest : AWSDynamoDBMockTest() {
     private val filesLocation = "src/test/resources/scan-items/"
 
     @Test
     fun `empty file`() {
         assertThat {
-            mock.scanItemsFromCSV(filesLocation + "empty.csv", "whatever")
+            mock.loadCSV(filesLocation + "empty.csv", "whatever")
         }.isFailure().hasMessage("The file is empty")
     }
 
     @Test
     fun `wrong value format`() {
         assertThat {
-            mock.scanItemsFromCSV(filesLocation + "wrong-1-value-format.csv", "whatever")
+            mock.loadCSV(filesLocation + "wrong-1-value-format.csv", "whatever")
         }.isFailure().hasMessage("Wrong value format. Use <column_name>|<type>")
     }
 
     @Test
     fun `wrong type format`() {
         assertThat {
-            mock.scanItemsFromCSV(filesLocation + "wrong-2-type-format.csv", "whatever")
+            mock.loadCSV(filesLocation + "wrong-2-type-format.csv", "whatever")
         }.isFailure().hasMessage("Function scanItems supports only S, N, NS, SS, NULL, BOOL types right now")
-    }
-
-    @Test
-    fun `wrong size of rows`() {
-        assertThat {
-            mock.scanItemsFromCSV(filesLocation + "wrong-3-size-match.csv", "whatever")
-        }.isFailure().hasMessage("2 row's size doesn't match the size of first row")
-        assertThat {
-            mock.scanItemsFromCSV(filesLocation + "wrong-3-size-match-2.csv", "whatever")
-        }.isFailure().hasMessage("3 row's size doesn't match the size of first row")
     }
 
     @Test
@@ -77,7 +67,7 @@ internal class AWSDynamoDBMockScanItemsTest : AWSDynamoDBMockTest() {
             .build()
         mock.createTable(createTableRequest)
 
-        mock.scanItemsFromCSV(filesLocation + "basic.csv", tableName)
+        mock.loadCSV(filesLocation + "basic.csv", tableName)
 
         val item = mapOf(
             "column1" to AttributeValue.builder().s("homecoming").build(),
@@ -138,7 +128,7 @@ internal class AWSDynamoDBMockScanItemsTest : AWSDynamoDBMockTest() {
             .build()
         mock.createTable(createTableRequest)
 
-        mock.scanItemsFromCSV(filesLocation + "ss-ns-types.csv", tableName)
+        mock.loadCSV(filesLocation + "ss-ns-types.csv", tableName)
 
         val item = mapOf(
             "column1" to AttributeValue.builder().s("captain america").build(),
@@ -183,7 +173,7 @@ internal class AWSDynamoDBMockScanItemsTest : AWSDynamoDBMockTest() {
             .build()
         mock.createTable(createTableRequest)
 
-        mock.scanItemsFromCSV(filesLocation + "l-m-types.csv", tableName)
+        mock.loadCSV(filesLocation + "l-m-types.csv", tableName)
 
         val item = mapOf(
             "column1" to AttributeValue.builder().s("something").build(),

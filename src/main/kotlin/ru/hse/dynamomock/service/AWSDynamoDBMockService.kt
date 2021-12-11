@@ -1,5 +1,6 @@
 package ru.hse.dynamomock.service
 
+import com.github.doyaaaaaken.kotlincsv.dsl.csvReader
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import ru.hse.dynamomock.exception.AWSMockCSVException
@@ -221,74 +222,72 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             .build()
     }
 
-    fun scanItems(fileName: String, tableName: String) {
+    fun loadCSV(fileName: String, tableName: String) {
         val allowedTypes = EnumSet.of(SS, S, N, NS, L, M, BOOL, NULL)
         val columnsInfo = mutableListOf<Pair<String, String>>()
-
-        File(fileName).useLines { line ->
-            val firstRow = line.firstOrNull() ?: throw AWSMockCSVException("The file is empty")
-            val info = firstRow.split(";")
-            info.forEach {
-                val value = it.split("|")
-                if (value.size != 2) {
-                    throw AWSMockCSVException("Wrong value format. Use <column_name>|<type>")
-                }
-                val columnName = value[0].trim()
-                val type = value[1].trim()
-
-                if (!allowedTypes.contains(DynamoType.valueOf(type))) {
-                    throw AWSMockCSVException("Function scanItems supports only S, N, NS, SS, NULL, BOOL types right now")
-                }
-                columnsInfo.add(columnName to type)
+        val rows = mutableListOf<List<String>>()
+        csvReader {
+            delimiter = ';'
+            quoteChar = '"'
+        }.open(fileName) {
+            readAllAsSequence().forEach { row ->
+                rows.add(row)
             }
         }
-
-        var i = 0
-        val itemsList = mutableListOf<Map<String, AttributeValue>>()
-        File(fileName).forEachLine {
-            if (i != 0) {
-                val columnValues = it.split(";").map { v -> v.trim() }
-                if (columnValues.size != columnsInfo.size) {
-                    throw AWSMockCSVException("${i + 1} row's size doesn't match the size of first row")
-                }
-                val item = columnValues.mapIndexed { index, element ->
-                    val (columnName, type) = columnsInfo[index]
-                    columnName to when (DynamoType.valueOf(type)) {
-                        S -> AttributeValue.builder().s(element).build()
-                        N -> AttributeValue.builder().n(element).build()
-                        NS -> {
-                            val list = element.split(",")
-                            AttributeValue.builder().ns(list).build()
-                        }
-                        SS -> {
-                            val list = element.split(",")
-                            AttributeValue.builder().ss(list).build()
-                        }
-                        NULL -> {
-                            AttributeValue.builder().nul(element == "true").build()
-                        }
-                        BOOL -> {
-                            AttributeValue.builder().bool(element == "true").build()
-                        }
-                        L -> {
-                            val attributeValues = Json.decodeFromString<List<AttributeTypeInfo>>(element)
-                            AttributeValue.builder()
-                                .l(attributeValues.map { v -> toAttributeValue(v) })
-                                .build()
-                        }
-                        M -> {
-                            val attributeValues = Json.decodeFromString<Map<String, AttributeTypeInfo>>(element)
-                            AttributeValue.builder().m(
-                                attributeValues.map { v -> v.key to toAttributeValue(v.value) }.toMap()
-                            ).build()
-                        }
-                        else -> throw AWSMockCSVException("Function scanItems supports only S, N, NS, SS, NULL, BOOL types right now")
-                    }
-                }.toMap()
-
-                itemsList.add(item)
+        val firstRow = rows.removeFirstOrNull() ?: throw AWSMockCSVException("The file is empty")
+        firstRow.forEach {
+            val value = it.split("|")
+            if (value.size != 2) {
+                throw AWSMockCSVException("Wrong value format. Use <column_name>|<type>")
             }
-            i++
+            val columnName = value[0].trim()
+            val type = value[1].trim()
+
+            if (!allowedTypes.contains(DynamoType.valueOf(type))) {
+                throw AWSMockCSVException("Function scanItems supports only S, N, NS, SS, NULL, BOOL types right now")
+            }
+            columnsInfo.add(columnName to type)
+        }
+
+        val itemsList = mutableListOf<Map<String, AttributeValue>>()
+
+        rows.forEach {
+            val item = it.mapIndexed { index, element ->
+                val (columnName, type) = columnsInfo[index]
+                columnName to when (DynamoType.valueOf(type)) {
+                    S -> AttributeValue.builder().s(element).build()
+                    N -> AttributeValue.builder().n(element).build()
+                    NS -> {
+                        val list = element.split(",")
+                        AttributeValue.builder().ns(list).build()
+                    }
+                    SS -> {
+                        val list = element.split(",")
+                        AttributeValue.builder().ss(list).build()
+                    }
+                    NULL -> {
+                        AttributeValue.builder().nul(element == "true").build()
+                    }
+                    BOOL -> {
+                        AttributeValue.builder().bool(element == "true").build()
+                    }
+                    L -> {
+                        val attributeValues = Json.decodeFromString<List<AttributeTypeInfo>>(element)
+                        AttributeValue.builder()
+                            .l(attributeValues.map { v -> toAttributeValue(v) })
+                            .build()
+                    }
+                    M -> {
+                        val attributeValues = Json.decodeFromString<Map<String, AttributeTypeInfo>>(element)
+                        AttributeValue.builder().m(
+                            attributeValues.map { v -> v.key to toAttributeValue(v.value) }.toMap()
+                        ).build()
+                    }
+                    else -> throw AWSMockCSVException("Function scanItems supports only S, N, NS, SS, NULL, BOOL types right now")
+                }
+            }.toMap()
+
+            itemsList.add(item)
         }
         itemsList.forEach {
             putItem(
