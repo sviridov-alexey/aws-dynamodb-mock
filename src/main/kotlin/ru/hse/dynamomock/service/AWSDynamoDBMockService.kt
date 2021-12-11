@@ -8,10 +8,9 @@ import ru.hse.dynamomock.db.DataStorageLayer
 import ru.hse.dynamomock.exception.dynamoException
 import ru.hse.dynamomock.exception.dynamoRequires
 import ru.hse.dynamomock.model.*
-import ru.hse.dynamomock.model.DynamoType.*
+import ru.hse.dynamomock.model.ImportableType.*
 import software.amazon.awssdk.services.dynamodb.model.*
 import java.util.Base64
-import java.util.EnumSet
 import ru.hse.dynamomock.model.query.retrieveAttributesTransformer
 import ru.hse.dynamomock.model.query.retrieveFilterExpression
 import ru.hse.dynamomock.model.query.retrieveKeyConditions
@@ -162,7 +161,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
         val response = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))
 
-        val item = response?.filter { request.attributesToGet().contains(it.name) }?.associate {
+        val item = response?.filter { it.name in request.attributesToGet() }?.associate {
             it.name to it.type.toAttributeValue()
         }
 
@@ -266,7 +265,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     }
 
     fun loadCSV(fileName: String, tableName: String) {
-        val allowedTypes = EnumSet.of(SS, S, N, NS, L, M, BOOL, NULL)
+        val allowedTypes = ImportableType.values().map { e -> e.name }
         val header = mutableListOf<Pair<String, String>>()
         val rows = mutableListOf<List<String>>()
         csvReader {
@@ -285,7 +284,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             }
 
             val (columnName, type) = value.zipWithNext().firstOrNull() ?: throw AWSMockCSVException("Wrong value format. Use <column_name>|")
-            if (!allowedTypes.contains(DynamoType.valueOf(type))) {
+            if (type !in allowedTypes) {
                 throw AWSMockCSVException("Function scanItems supports only S, N, NS, SS, NULL, BOOL types right now")
             }
             header.add(columnName to type)
@@ -294,7 +293,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         rows.forEach {
             val item = it.mapIndexed { index, element ->
                 val (columnName, type) = header[index]
-                columnName to when (DynamoType.valueOf(type)) {
+                columnName to when (ImportableType.valueOf(type)) {
                     S -> AttributeValue.builder().s(element).build()
                     N -> AttributeValue.builder().n(element).build()
                     NS -> {
@@ -323,7 +322,6 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                             attributeValues.map { v -> v.key to v.value.toAttributeValue() }.toMap()
                         ).build()
                     }
-                    else -> throw AWSMockCSVException("Function scanItems supports only S, N, NS, SS, NULL, BOOL types right now")
                 }
             }.toMap()
 

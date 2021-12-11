@@ -133,6 +133,17 @@ enum class DynamoType {
     L
 }
 
+enum class ImportableType {
+    S,
+    N,
+    SS,
+    NS,
+    BOOL,
+    NULL,
+    M,
+    L
+}
+
 fun AttributeValue.toAttributeTypeInfo(): AttributeTypeInfo = AttributeTypeInfo(
     s = s(),
     n = n(),
