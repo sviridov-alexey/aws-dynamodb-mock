@@ -267,7 +267,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
     fun loadCSV(fileName: String, tableName: String) {
         val allowedTypes = EnumSet.of(SS, S, N, NS, L, M, BOOL, NULL)
-        val columnsInfo = mutableListOf<Pair<String, String>>()
+        val header = mutableListOf<Pair<String, String>>()
         val rows = mutableListOf<List<String>>()
         csvReader {
             delimiter = ';'
@@ -279,24 +279,21 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         }
         val firstRow = rows.removeFirstOrNull() ?: throw AWSMockCSVException("The file is empty")
         firstRow.forEach {
-            val value = it.split("|")
+            val value = it.split("|").map{ v -> v.trim() }
             if (value.size != 2) {
                 throw AWSMockCSVException("Wrong value format. Use <column_name>|<type>")
             }
-            val columnName = value[0].trim()
-            val type = value[1].trim()
 
+            val (columnName, type) = value.zipWithNext().firstOrNull() ?: throw AWSMockCSVException("Wrong value format. Use <column_name>|")
             if (!allowedTypes.contains(DynamoType.valueOf(type))) {
                 throw AWSMockCSVException("Function scanItems supports only S, N, NS, SS, NULL, BOOL types right now")
             }
-            columnsInfo.add(columnName to type)
+            header.add(columnName to type)
         }
-
-        val itemsList = mutableListOf<Map<String, AttributeValue>>()
 
         rows.forEach {
             val item = it.mapIndexed { index, element ->
-                val (columnName, type) = columnsInfo[index]
+                val (columnName, type) = header[index]
                 columnName to when (DynamoType.valueOf(type)) {
                     S -> AttributeValue.builder().s(element).build()
                     N -> AttributeValue.builder().n(element).build()
@@ -330,12 +327,9 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                 }
             }.toMap()
 
-            itemsList.add(item)
-        }
-        itemsList.forEach {
             putItem(
                 PutItemRequest.builder()
-                    .item(it)
+                    .item(item)
                     .tableName(tableName)
                     .build()
             )
