@@ -145,17 +145,23 @@ class ExposedStorage : DataStorageLayer {
         private val id = integer("id").autoIncrement()
         val attributes = text("attributes")
         val stringPartitionKey = text("stringPartitionKey").nullable().default(null)
-        val numPartitionKey = decimal("numPartitionKey", 20, 0).nullable().default(null)
+        val numPartitionKey = decimal("numPartitionKey", PRECISION, SCALE).nullable().default(null)
         val stringSortKey = text("stringSortKey").nullable().default(null)
-        val numSortKey = decimal("numSortKey", 20, 0).nullable().default(null)
+        val numSortKey = decimal("numSortKey", PRECISION, SCALE).nullable().default(null)
 
-        val stringLSIKeys = metadata.localSecondaryIndexes?.mapIndexed{i, _ -> text("stringLSISortKey$i").nullable().default(null)  }
-        val numLSIKeys = metadata.localSecondaryIndexes?.mapIndexed{i, _ -> decimal("numLSISortKey$i", 20, 0).nullable().default(null)  }
+        val stringLSIKeys = metadata.localSecondaryIndexes.mapIndexed{i, _ -> text("stringLSISortKey$i").nullable().default(null)  }
+        val numLSIKeys =
+            metadata.localSecondaryIndexes.mapIndexed{i, _ -> decimal("numLSISortKey$i", PRECISION, SCALE).nullable().default(null)  }
 
         override val primaryKey: PrimaryKey = PrimaryKey(id)
 
         val partitionKeyName = metadata.partitionKey
         val sortKeyName = metadata.sortKey
+    }
+
+    companion object {
+        private const val PRECISION = 20
+        private const val SCALE = 0
     }
 }
 
