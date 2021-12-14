@@ -2,8 +2,11 @@ package ru.hse.dynamomock.model.query
 
 import ru.hse.dynamomock.exception.dynamoException
 import ru.hse.dynamomock.exception.dynamoRequires
+import ru.hse.dynamomock.model.TableMetadata
 import ru.hse.dynamomock.model.query.grammar.ProjectionExpressionGrammar
+import ru.hse.dynamomock.model.sortKey
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
+import software.amazon.awssdk.services.dynamodb.model.ProjectionType
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
 import software.amazon.awssdk.services.dynamodb.model.Select
 
@@ -35,21 +38,50 @@ sealed interface QueryAttribute {
     }
 }
 
-fun QueryRequest.retrieveAttributesTransformer(): (Map<String, AttributeValue>) -> (Map<String, AttributeValue>) {
-    dynamoRequires(indexName() == null || select() == Select.ALL_PROJECTED_ATTRIBUTES) {
-        "Indexes are not supported in query yet."
-    }
+fun QueryRequest.retrieveAttributesTransformer(
+    table: TableMetadata
+): (Map<String, AttributeValue>) -> (Map<String, AttributeValue>) {
+    val select = select() ?: if (indexName() == null) null else Select.ALL_PROJECTED_ATTRIBUTES
 
     val projectionExpression = projectionExpression()
     val attributesToGet = attributesToGet().takeIf { hasAttributesToGet() }
 
-    if (select() == Select.ALL_ATTRIBUTES || select() == Select.COUNT) {
+    if (select == Select.ALL_ATTRIBUTES || select == Select.COUNT) {
         dynamoRequires(projectionExpression == null && attributesToGet == null) {
             "ProjectionExpression and AttributesToGet must be null if Select != SPECIFIC_ATTRIBUTES"
         }
         return { it }
     }
-    dynamoRequires(select() == Select.SPECIFIC_ATTRIBUTES || select() == null) {
+    if (select == Select.ALL_PROJECTED_ATTRIBUTES) {
+        dynamoRequires(indexName() != null) {
+            "Select cannot be 'ALL_PROJECTED_ATTRIBUTES' without provided index."
+        }
+        dynamoRequires(projectionExpression == null && attributesToGet == null) {
+            "ProjectionExpression and AttributesToGet must be null if select is 'ALL_PROJECTED_ATTRIBUTES'."
+        }
+        val index = table.localSecondaryIndex(indexName())
+        val keys = listOfNotNull(table.partitionKey, table.sortKey, index.sortKey)
+        return when (val projectionType = index.projection().projectionType()) {
+            ProjectionType.ALL -> { attrs -> attrs }
+            ProjectionType.KEYS_ONLY, ProjectionType.INCLUDE -> { attrs ->
+                val result = attrs.filterKeys { it in keys }.apply {
+                    dynamoRequires(size == 3 || size == 2 && table.sortKey == null) {
+                        "Attributes must contain partition key, sort key (if presented) and index key."
+                    }
+                }.toMutableMap()
+
+                if (projectionType === ProjectionType.INCLUDE) {
+                    result += index.projection().nonKeyAttributes().mapNotNull { attr ->
+                        attrs[attr]?.let { attr to it }
+                    }
+                }
+                result
+            }
+            else -> throw dynamoException("Unknown type of projection in index ${index.indexName()}.")
+        }
+    }
+
+    dynamoRequires(select == Select.SPECIFIC_ATTRIBUTES || select == null) {
         "Unknown Select in query."
     }
 
@@ -62,11 +94,11 @@ fun QueryRequest.retrieveAttributesTransformer(): (Map<String, AttributeValue>) 
         projectionExpression != null -> {
             val grammar = ProjectionExpressionGrammar(expressionAttributeNames() ?: emptyMap())
             val projection = grammar.parse(projectionExpression)
-            return { items ->
+            return { attrs ->
                 projection.mapNotNull { attribute ->
                     val name = attribute.simpleName
-                    if (name in items) {
-                        attribute.retrieve(mapOf(name to items.getValue(name)))?.let { name to items.getValue(name) }
+                    if (name in attrs) {
+                        attribute.retrieve(mapOf(name to attrs.getValue(name)))?.let { name to attrs.getValue(name) }
                     } else {
                         null
                     }
@@ -77,11 +109,11 @@ fun QueryRequest.retrieveAttributesTransformer(): (Map<String, AttributeValue>) 
             if (attributesToGet != attributesToGet.distinct()) {
                 throw dynamoException("AttributesToGet contain two identical attributes.")
             }
-            return { items ->
-                attributesToGet.mapNotNull { if (it in items) it to items.getValue(it) else null }.toMap()
+            return { attrs ->
+                attributesToGet.mapNotNull { if (it in attrs) it to attrs.getValue(it) else null }.toMap()
             }
         }
-        select() == null -> {
+        select == null -> {
             return { it }
         }
         else -> throw dynamoException(

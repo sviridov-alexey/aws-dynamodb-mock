@@ -14,6 +14,11 @@ data class TableMetadata(
     val localSecondaryIndexes: List<LocalSecondaryIndex>,
     val creationDateTime: Instant = Instant.now(),
 ) {
+    fun localSecondaryIndex(name: String): LocalSecondaryIndex {
+        return localSecondaryIndexes.firstOrNull { it.indexName() == name }
+            ?: throw dynamoException("Cannot find index $name in table $tableName.")
+    }
+
     // TODO supports other parameters
     fun toTableDescription(): TableDescription = TableDescription.builder()
         .tableName(tableName)

@@ -57,9 +57,6 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         dynamoRequires(request.limit() == null || request.limit() > 0) {
             "Limit must be >= 1."
         }
-        dynamoRequires(request.indexName() == null) {
-            "Indexes are not supported in query yet."
-        }
         dynamoRequires(request.consistentRead() != false) {
             "Non-consistent read is not supported in query yet."
         }
@@ -70,14 +67,24 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         }
 
         val table = tablesMetadata.getValue(tableName)
+        val index = request.indexName()?.let { table.localSecondaryIndex(it) }
         val keyConditions = request.retrieveKeyConditions()
         keyConditions[table.partitionKey].let {
             dynamoRequires(it != null && it.comparisonOperator() == ComparisonOperator.EQ) {
                 "Partition key must use '=' operator."
             }
         }
-        dynamoRequires(keyConditions.size <= 2 && !(keyConditions.size == 2 && table.sortKey !in keyConditions)) {
-            "Only partition and sort keys can be used in key conditions."
+        dynamoRequires(keyConditions.size <= 2) {
+            "Length of key conditions must be 1 or 2."
+        }
+        if (index == null) {
+            dynamoRequires(keyConditions.size == 1 || table.sortKey in keyConditions) {
+                "Only partition and sort keys can be used in key conditions."
+            }
+        } else {
+            dynamoRequires(keyConditions.size == 1 || index.sortKey in keyConditions) {
+                "Only partition key and index sort key can be used in key conditions."
+            }
         }
 
         val items = storage.query(tableName, keyConditions).let {
@@ -117,7 +124,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             responseBuilder.lastEvaluatedKey(DefaultSdkAutoConstructMap.getInstance())
         }
 
-        val transformer = request.retrieveAttributesTransformer()
+        val transformer = request.retrieveAttributesTransformer(table)
         if (request.select() != Select.COUNT) {
             responseBuilder.items(filteredItems.map(transformer))
         } else {
