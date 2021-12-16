@@ -291,7 +291,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     }
 
     // TODO take into account that it's impossible to use expression-like and not-expression-like at the same query
-    private fun SelectRequest.select(): SelectResponseBuilder {
+    private fun SelectRequest.select(): SelectResponse {
         dynamoRequires(limit == null || limit > 0) {
             "Limit must be >= 1."
         }
@@ -352,7 +352,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             }
         } ?: items
 
-        val responseBuilder = SelectResponseBuilder().apply {
+        val responseBuilder = SelectResponse.Builder().apply {
             count = filteredItems.size
             scannedCount = items.size
         }
@@ -369,6 +369,6 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         } else {
             responseBuilder.items = filteredItems.map(transformer)
         }
-        return responseBuilder
+        return responseBuilder.build()
     }
 }
