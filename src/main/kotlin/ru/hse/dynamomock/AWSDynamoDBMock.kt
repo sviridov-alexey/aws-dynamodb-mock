@@ -39,6 +39,8 @@ class AWSDynamoDBMock : DynamoDbClient {
 
     override fun query(queryRequest: QueryRequest) = service.query(queryRequest)
 
+    override fun scan(scanRequest: ScanRequest) = service.scan(scanRequest)
+
     override fun putItem(putItemRequest: PutItemRequest): PutItemResponse {
         return service.putItem(putItemRequest)
     }

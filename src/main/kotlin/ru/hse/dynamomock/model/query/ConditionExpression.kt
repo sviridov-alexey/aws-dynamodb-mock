@@ -223,53 +223,7 @@ sealed interface ConditionExpression {
     }
 }
 
-fun QueryRequest.retrieveFilterExpression(): ConditionExpression? {
-    return if (hasQueryFilter()) {
-        retrieveConditionExpression(queryFilter(), conditionalOperator() ?: ConditionalOperator.AND)
-    } else if (filterExpression() != null) {
-        val filterExpression = filterExpression()
-        ConditionExpressionGrammar(expressionAttributeNames(), expressionAttributeValues()).parse(filterExpression)
-    } else {
-        null
-    }
-}
-
-fun QueryRequest.retrieveKeyConditions(): Map<String, Condition> {
-    return if (hasKeyConditions()) {
-        keyConditions()
-    } else {
-        val keyConditionExpression = keyConditionExpression()
-            ?: throw dynamoException("Nor key conditions, nor key condition expression was provided.")
-        val conditionExpression = ConditionExpressionGrammar(expressionAttributeNames(), expressionAttributeValues())
-            .parse(keyConditionExpression)
-
-        when (conditionExpression) {
-            is ConditionExpression.And -> mapOf(
-                conditionExpression.left.toKeyCondition(),
-                conditionExpression.right.toKeyCondition()
-            )
-            else -> mapOf(conditionExpression.toKeyCondition())
-        }
-    }
-}
-
-private fun retrieveConditionExpression(
-    filter: Map<String, Condition>,
-    conditionalOperator: ConditionalOperator
-): ConditionExpression {
-    val conditions = filter.entries.map { (name, condition) ->
-        condition.toConditionExpression(Parameter.Attribute(QueryAttribute.Simple.Value(name)))
-    }
-    return conditions.reduce { expr, cond ->
-        when (conditionalOperator) {
-            ConditionalOperator.AND -> ConditionExpression.And(expr, cond)
-            ConditionalOperator.OR -> ConditionExpression.Or(expr, cond)
-            else -> throw dynamoException("Unknown conditional operator to combine query filter")
-        }
-    }
-}
-
-private fun Condition.toConditionExpression(attribute: Parameter.Attribute): ConditionExpression {
+fun Condition.toConditionExpression(attribute: Parameter.Attribute): ConditionExpression {
     val arguments = attributeValueList().map { Parameter.Value(it) }
 
     fun assertArgs(number: Int, strict: Boolean = true) {
@@ -338,7 +292,7 @@ private fun Condition.toConditionExpression(attribute: Parameter.Attribute): Con
 private fun QueryAttribute.toValue(): QueryAttribute.Simple.Value = this as? QueryAttribute.Simple.Value
     ?: throw dynamoException("Attribute in key comparison must have type from [N, S, B]")
 
-private fun ConditionExpression.toKeyCondition(): Pair<String, Condition> = when (this) {
+fun ConditionExpression.toKeyCondition(): Pair<String, Condition> = when (this) {
     is ConditionExpression.Neq -> throw dynamoException(
         "Comparison in key condition expression cannot have <> operator."
     )
