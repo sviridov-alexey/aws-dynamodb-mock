@@ -11,12 +11,11 @@ data class TableMetadata(
     val partitionKey: String,
     val sortKey: String?,
     val tableStatus: TableStatus,
-    val localSecondaryIndexes: List<LocalSecondaryIndex>,
+    val localSecondaryIndexes: Map<String, LocalSecondaryIndex>,
     val creationDateTime: Instant = Instant.now(),
 ) {
     fun localSecondaryIndex(name: String): LocalSecondaryIndex {
-        return localSecondaryIndexes.firstOrNull { it.indexName() == name }
-            ?: throw dynamoException("Cannot find index $name in table $tableName.")
+        return localSecondaryIndexes[name] ?: throw dynamoException("Cannot find index $name in table $tableName.")
     }
 
     // TODO supports other parameters
@@ -28,7 +27,7 @@ data class TableMetadata(
             sortKey?.let { nameToKeySchemaElement(it, KeyType.RANGE) }
         ))
         .tableStatus(tableStatus)
-        .localSecondaryIndexes(localSecondaryIndexes.map { toLSIndexDescription(it) })
+        .localSecondaryIndexes(localSecondaryIndexes.map { toLSIndexDescription(it.value) })
         .creationDateTime(creationDateTime)
         .build()
 }
@@ -51,15 +50,18 @@ private fun getPartitionKey(keySchema: List<KeySchemaElement>) =
 private fun getSortKey(keySchema: List<KeySchemaElement>) =
     keySchema.firstOrNull { it.isSort }?.attributeName()
 
-private fun checkLocalSecondaryIndexes(indexes: List<LocalSecondaryIndex>, tableKeys: List<KeySchemaElement>): List<LocalSecondaryIndex> {
+private fun checkLocalSecondaryIndexes(
+    indexes: List<LocalSecondaryIndex>,
+    tableKeys: List<KeySchemaElement>
+): Map<String, LocalSecondaryIndex> {
     val checkIndexName = "[a-zA-Z0-9-_.]+".toRegex()
     dynamoRequires(indexes.size <= 5) {
         "Cannot have more than 5 local secondary indexes per table"
     }
-    val indexesNames = mutableSetOf<String>()
+    val indexesMap = mutableMapOf<String, LocalSecondaryIndex>()
     indexes.forEach {
         val name = it.indexName()
-        dynamoRequires(!indexesNames.contains(name)) {
+        dynamoRequires(!indexesMap.contains(name)) {
             "Two local secondary indices have the same name"
         }
 
@@ -88,9 +90,9 @@ private fun checkLocalSecondaryIndexes(indexes: List<LocalSecondaryIndex>, table
             )
 
         }
-        indexesNames.add(name)
+        indexesMap[name] = it
     }
-    return indexes
+    return indexesMap
 }
 
 private fun nameToKeySchemaElement(name: String, keyType: KeyType) =

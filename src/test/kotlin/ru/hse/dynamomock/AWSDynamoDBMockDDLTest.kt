@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import ru.hse.dynamomock.model.TableMetadata
 import software.amazon.awssdk.services.dynamodb.model.*
 import java.time.Instant
 
@@ -105,8 +106,59 @@ internal class AWSDynamoDBMockDDLTest : AWSDynamoDBMockTest() {
 
     @Test
     fun `test same indices name`() {
+        val attributeDefinitions = listOf(
+            AttributeDefinition.builder()
+                .attributeName("column1")
+                .attributeType("S")
+                .build(),
+            AttributeDefinition.builder()
+                .attributeName("column2")
+                .attributeType("S")
+                .build(),
+            AttributeDefinition.builder()
+                .attributeName("column3")
+                .attributeType("N")
+                .build()
+        )
+        val sameLSI = LocalSecondaryIndex.builder()
+            .indexName("sameIndex")
+            .projection(Projection.builder().projectionType(ProjectionType.ALL).build())
+            .keySchema(
+                listOf(
+                    KeySchemaElement.builder()
+                        .attributeName("column1")
+                        .keyType("HASH")
+                        .build(),
+                    KeySchemaElement.builder()
+                        .attributeName("column3")
+                        .keyType("RANGE")
+                        .build()
+                )
+            )
+            .build()
         assertThat {
-            mock.createTable(createTableMetadata("testTable", 0, 1, Instant.now(), 4).toCreateTableRequest())
+            mock.createTable(
+                CreateTableRequest.builder()
+                    .tableName("testTable")
+                    .attributeDefinitions(attributeDefinitions)
+                    .keySchema(
+                        listOf(
+                            KeySchemaElement.builder()
+                                .attributeName("column1")
+                                .keyType("HASH")
+                                .build(),
+                            KeySchemaElement.builder()
+                                .attributeName("column2")
+                                .keyType("RANGE")
+                                .build()
+                        )
+                    )
+                    .localSecondaryIndexes(listOf(
+                        sameLSI,
+                        sameLSI
+                    ))
+                    .build()
+                )
         }.isFailure().hasMessage("Two local secondary indices have the same name")
     }
 
@@ -114,15 +166,6 @@ internal class AWSDynamoDBMockDDLTest : AWSDynamoDBMockTest() {
     fun `test wrong index name`() {
         assertThat {
             mock.createTable(createTableMetadata("testTable", 0, 1, Instant.now(), 5).toCreateTableRequest())
-        }.isFailure().hasMessage(
-            """
-                Invalid table/index name.  Table/index names must be between 3 and 255 characters long, 
-                and may contain only the characters a-z, A-Z, 0-9, '_', '-', and '.
-            """.trimIndent()
-        )
-
-        assertThat {
-            mock.createTable(createTableMetadata("testTable", 0, 1, Instant.now(), 6).toCreateTableRequest())
         }.isFailure().hasMessage(
             """
                 Invalid table/index name.  Table/index names must be between 3 and 255 characters long, 

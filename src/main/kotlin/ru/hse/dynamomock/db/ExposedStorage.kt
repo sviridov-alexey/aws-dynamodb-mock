@@ -167,7 +167,7 @@ class ExposedStorage : DataStorageLayer {
 
         val partitionKeyName = metadata.partitionKey
         val sortKeyName = metadata.sortKey
-        val lsiNames = metadata.localSecondaryIndexes.map { it.sortKey }
+        val lsiNames = metadata.localSecondaryIndexes.map { it.value.sortKey }
 
         val namesToStringColumns =
             listOf(partitionKeyName to stringPartitionKey, sortKeyName to stringSortKey) + lsiNames.zip(stringLsiKeys)

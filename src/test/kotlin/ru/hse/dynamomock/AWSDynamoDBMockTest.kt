@@ -24,7 +24,7 @@ internal open class AWSDynamoDBMockTest {
                 sortKey?.let { KeySchemaElement.builder().attributeName(it).keyType(KeyType.RANGE).build() }
             )
         )
-        .localSecondaryIndexes(localSecondaryIndexes)
+        .localSecondaryIndexes(localSecondaryIndexes.values)
         .build()
 
     protected fun TableMetadata.toDeleteTableRequest(): DeleteTableRequest = DeleteTableRequest.builder()
@@ -163,7 +163,10 @@ internal open class AWSDynamoDBMockTest {
             attributeDefinitionPool[partitionKeyIndex].attributeName(),
             sortKeyIndex?.let { attributeDefinitionPool[it].attributeName() },
             TableStatus.ACTIVE,
-            lsiIndex?.let{localSecondaryIndexesPool(partitionKeyIndex)[lsiIndex]} ?: emptyList(),
+            lsiIndex?.let{
+                val list = localSecondaryIndexesPool(partitionKeyIndex)[lsiIndex]
+                list.associateBy { it.indexName()!! }
+            } ?: emptyMap(),
             creationDateTime
         )
 
