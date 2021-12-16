@@ -1,6 +1,8 @@
 package ru.hse.dynamomock.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import ru.hse.dynamomock.exception.dynamoRequires
 import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
@@ -142,6 +144,37 @@ enum class ImportableType {
     NULL,
     M,
     L
+}
+
+fun toAttributeValue(type: String, element: String): AttributeValue = when (ImportableType.valueOf(type)) {
+    ImportableType.S -> AttributeValue.builder().s(element).build()
+    ImportableType.N -> AttributeValue.builder().n(element).build()
+    ImportableType.NS -> {
+        val list = element.split(",")
+        AttributeValue.builder().ns(list).build()
+    }
+    ImportableType.SS -> {
+        val list = element.split(",")
+        AttributeValue.builder().ss(list).build()
+    }
+    ImportableType.NULL -> {
+        AttributeValue.builder().nul(element == "true").build()
+    }
+    ImportableType.BOOL -> {
+        AttributeValue.builder().bool(element == "true").build()
+    }
+    ImportableType.L -> {
+        val attributeValues = Json.decodeFromString<List<AttributeTypeInfo>>(element)
+        AttributeValue.builder()
+            .l(attributeValues.map { v -> v.toAttributeValue() })
+            .build()
+    }
+    ImportableType.M -> {
+        val attributeValues = Json.decodeFromString<Map<String, AttributeTypeInfo>>(element)
+        AttributeValue.builder().m(
+            attributeValues.map { v -> v.key to v.value.toAttributeValue() }.toMap()
+        ).build()
+    }
 }
 
 fun AttributeValue.toAttributeTypeInfo(): AttributeTypeInfo = AttributeTypeInfo(

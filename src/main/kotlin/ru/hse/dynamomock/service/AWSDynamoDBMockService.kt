@@ -1,14 +1,11 @@
 package ru.hse.dynamomock.service
 
 import com.github.doyaaaaaken.kotlincsv.dsl.csvReader
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import ru.hse.dynamomock.exception.AWSMockCSVException
 import ru.hse.dynamomock.db.DataStorageLayer
 import ru.hse.dynamomock.exception.dynamoException
 import ru.hse.dynamomock.exception.dynamoRequires
 import ru.hse.dynamomock.model.*
-import ru.hse.dynamomock.model.ImportableType.*
 import software.amazon.awssdk.services.dynamodb.model.*
 import java.util.Base64
 import ru.hse.dynamomock.model.query.retrieveAttributesTransformer
@@ -293,36 +290,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         rows.forEach {
             val item = it.mapIndexed { index, element ->
                 val (columnName, type) = header[index]
-                columnName to when (ImportableType.valueOf(type)) {
-                    S -> AttributeValue.builder().s(element).build()
-                    N -> AttributeValue.builder().n(element).build()
-                    NS -> {
-                        val list = element.split(",")
-                        AttributeValue.builder().ns(list).build()
-                    }
-                    SS -> {
-                        val list = element.split(",")
-                        AttributeValue.builder().ss(list).build()
-                    }
-                    NULL -> {
-                        AttributeValue.builder().nul(element == "true").build()
-                    }
-                    BOOL -> {
-                        AttributeValue.builder().bool(element == "true").build()
-                    }
-                    L -> {
-                        val attributeValues = Json.decodeFromString<List<AttributeTypeInfo>>(element)
-                        AttributeValue.builder()
-                            .l(attributeValues.map { v -> v.toAttributeValue() })
-                            .build()
-                    }
-                    M -> {
-                        val attributeValues = Json.decodeFromString<Map<String, AttributeTypeInfo>>(element)
-                        AttributeValue.builder().m(
-                            attributeValues.map { v -> v.key to v.value.toAttributeValue() }.toMap()
-                        ).build()
-                    }
-                }
+                columnName to toAttributeValue(type, element)
             }.toMap()
 
             putItem(
@@ -383,9 +351,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             .message("Cannot do operations on a non-existent table").build()
         val actualSize = if (tableMetadata.sortKey != null) 2 else 1
         if (keys.size > actualSize) {
-            throw DynamoDbException.builder()
-                .message("The number of conditions on the keys is invalid")
-                .build()
+            throw dynamoException("The number of conditions on the keys is invalid")
         }
     }
 }
