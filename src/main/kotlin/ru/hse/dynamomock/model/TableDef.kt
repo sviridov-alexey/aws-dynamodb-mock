@@ -32,14 +32,18 @@ data class TableMetadata(
         .build()
 }
 
-fun CreateTableRequest.toTableMetadata(): TableMetadata = TableMetadata(
-    tableName(),
-    attributeDefinitions(),
-    getPartitionKey(keySchema()),
-    getSortKey(keySchema()),
-    TableStatus.ACTIVE,
-    checkLocalSecondaryIndexes(localSecondaryIndexes(), keySchema())
-)
+fun CreateTableRequest.toTableMetadata(): TableMetadata {
+    checkKeySchema(keySchema())
+    return TableMetadata(
+        tableName(),
+        attributeDefinitions(),
+        getPartitionKey(keySchema()),
+        getSortKey(keySchema()),
+        TableStatus.ACTIVE,
+        checkLocalSecondaryIndexes(localSecondaryIndexes(), keySchema())
+    )
+}
+
 
 private val KeySchemaElement.isPartition get(): Boolean = keyType() == KeyType.HASH
 private val KeySchemaElement.isSort get(): Boolean = keyType() == KeyType.RANGE
@@ -54,6 +58,14 @@ private fun checkLocalSecondaryIndexes(
     indexes: List<LocalSecondaryIndex>,
     tableKeys: List<KeySchemaElement>
 ): Map<String, LocalSecondaryIndex> {
+    if (indexes.isEmpty()) {
+        return emptyMap()
+    }
+
+    dynamoRequires(tableKeys.size > 1) {
+        "Local Secondary indices are not allowed on hash tables, only hash and range tables"
+    }
+
     val checkIndexName = "[a-zA-Z0-9-_.]+".toRegex()
     dynamoRequires(indexes.size <= 5) {
         "Cannot have more than 5 local secondary indexes per table"
@@ -80,10 +92,14 @@ private fun checkLocalSecondaryIndexes(
             "No defined key schema.  A key schema containing at least a hash key must be defined for all tables"
         }
 
-        val primaryKey = it.keySchema().firstOrNull { key -> key.keyType() == KeyType.HASH }
-            ?: throw dynamoException(
-                "No Hash Key specified in schema.  All Dynamo DB tables must have exactly one hash key"
-            )
+        checkKeySchema(it.keySchema())
+
+        dynamoRequires(it.keySchema().size == 2) {
+            "Local secondary indices must have a range key"
+        }
+
+        val primaryKey = it.keySchema()[0]
+
         if (getPartitionKey(tableKeys) != primaryKey.attributeName()) {
             throw dynamoException(
                 "Local Secondary indices must have the same hash key as the main table"
@@ -93,6 +109,28 @@ private fun checkLocalSecondaryIndexes(
         indexesMap[name] = it
     }
     return indexesMap
+}
+
+private fun checkKeySchema(keySchema: List<KeySchemaElement>) {
+    dynamoRequires(keySchema.size < 3) {
+        "Key Schema too big. Key Schema must at most consist of the hash and range key of a table"
+    }
+
+    val filteredSchema = keySchema.filter { it.isPartition }
+
+    dynamoRequires(filteredSchema.isNotEmpty()) {
+        "No Hash Key specified in schema. All Dynamo DB tables must have exactly one hash key"
+    }
+
+    dynamoRequires(filteredSchema.size <= 1) {
+        "Too many hash keys specified. All Dynamo DB tables must have exactly one hash key"
+    }
+
+    if (keySchema.size == 2) {
+        dynamoRequires(keySchema[0].isPartition && keySchema[1].isSort) {
+            "Invalid key order. Hash Key must be specified first in key schema, Range Key must be specifed second"
+        }
+    }
 }
 
 private fun nameToKeySchemaElement(name: String, keyType: KeyType) =
