@@ -12,7 +12,7 @@ import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement
 import kotlin.test.assertEquals
 
 internal class AWSDynamoDBMockLoadCSVTest : AWSDynamoDBMockTest() {
-    private val filesLocation = "src/test/resources/scan-items/"
+    private val filesLocation = "src/test/resources/load-items/"
 
     @Test
     fun `empty file`() {
@@ -32,11 +32,11 @@ internal class AWSDynamoDBMockLoadCSVTest : AWSDynamoDBMockTest() {
     fun `wrong type format`() {
         assertThat {
             mock.loadCSV(filesLocation + "wrong-2-type-format.csv", "whatever")
-        }.isFailure().hasMessage("Function scanItems supports only S, N, NS, SS, NULL, BOOL types right now")
+        }.isFailure().hasMessage("Function loadItems supports all types except B, BS")
     }
 
     @Test
-    fun `simple scan items`() {
+    fun `simple load items`() {
         // create table
         val tableName = "testTable"
         val attributeDefinitions = listOf<AttributeDefinition>(
@@ -105,7 +105,7 @@ internal class AWSDynamoDBMockLoadCSVTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `scan items with ns and ss types`() {
+    fun `load items with ns and ss types`() {
         // create table
         val tableName = "testTable"
         val attributeDefinitions = listOf<AttributeDefinition>(
@@ -151,7 +151,7 @@ internal class AWSDynamoDBMockLoadCSVTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `scan l item`() {
+    fun `load l item`() {
         val tableName = "testTable"
         val attributeDefinitions = listOf<AttributeDefinition>(
             AttributeDefinition.builder()

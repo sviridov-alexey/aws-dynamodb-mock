@@ -282,7 +282,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
             val (columnName, type) = value.zipWithNext().firstOrNull() ?: throw AWSMockCSVException("Wrong value format. Use <column_name>|")
             if (type !in allowedTypes) {
-                throw AWSMockCSVException("Function scanItems supports only S, N, NS, SS, NULL, BOOL types right now")
+                throw AWSMockCSVException("Function loadItems supports all types except B, BS")
             }
             header.add(columnName to type)
         }
