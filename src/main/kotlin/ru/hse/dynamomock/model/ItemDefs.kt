@@ -1,6 +1,8 @@
 package ru.hse.dynamomock.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import ru.hse.dynamomock.exception.dynamoRequires
 import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
@@ -43,16 +45,16 @@ data class AttributeInfo(
 
 @Serializable
 data class AttributeTypeInfo(
-    val s: String?,
-    val n: String?,
-    val b : String?,
-    val ss: List<String>?,
-    val ns: List<String>?,
-    val bs: List<String>?,
-    val m: Map<String, AttributeTypeInfo>?,
-    val l: List<AttributeTypeInfo>?,
-    val bool: Boolean?,
-    val nul: Boolean?
+    val s: String? = null,
+    val n: String? = null,
+    val b : String? = null,
+    val ss: List<String>? = null,
+    val ns: List<String>? = null,
+    val bs: List<String>? = null,
+    val m: Map<String, AttributeTypeInfo>? = null,
+    val l: List<AttributeTypeInfo>? = null,
+    val bool: Boolean? = null,
+    val nul: Boolean? = null
 ) {
     @kotlinx.serialization.Transient
     private val notNullProperties = listOfNotNull(
@@ -120,6 +122,61 @@ class NumKey(
     val attributeValue: BigDecimal
 ) : Key(attributeName)
 
+enum class DynamoType {
+    S,
+    N,
+    B,
+    SS,
+    NS,
+    BS,
+    BOOL,
+    NULL,
+    M,
+    L
+}
+
+enum class ImportableType {
+    S,
+    N,
+    SS,
+    NS,
+    BOOL,
+    NULL,
+    M,
+    L
+}
+
+fun toAttributeValue(type: String, element: String): AttributeValue = when (ImportableType.valueOf(type)) {
+    ImportableType.S -> AttributeValue.builder().s(element).build()
+    ImportableType.N -> AttributeValue.builder().n(element).build()
+    ImportableType.NS -> {
+        val list = element.split(",")
+        AttributeValue.builder().ns(list).build()
+    }
+    ImportableType.SS -> {
+        val list = element.split(",")
+        AttributeValue.builder().ss(list).build()
+    }
+    ImportableType.NULL -> {
+        AttributeValue.builder().nul(element == "true").build()
+    }
+    ImportableType.BOOL -> {
+        AttributeValue.builder().bool(element == "true").build()
+    }
+    ImportableType.L -> {
+        val attributeValues = Json.decodeFromString<List<AttributeTypeInfo>>(element)
+        AttributeValue.builder()
+            .l(attributeValues.map { v -> v.toAttributeValue() })
+            .build()
+    }
+    ImportableType.M -> {
+        val attributeValues = Json.decodeFromString<Map<String, AttributeTypeInfo>>(element)
+        AttributeValue.builder().m(
+            attributeValues.map { v -> v.key to v.value.toAttributeValue() }.toMap()
+        ).build()
+    }
+}
+
 fun AttributeValue.toAttributeTypeInfo(): AttributeTypeInfo = AttributeTypeInfo(
     s = s(),
     n = n(),
@@ -132,3 +189,4 @@ fun AttributeValue.toAttributeTypeInfo(): AttributeTypeInfo = AttributeTypeInfo(
     bool = bool(),
     nul = nul()
 )
+
