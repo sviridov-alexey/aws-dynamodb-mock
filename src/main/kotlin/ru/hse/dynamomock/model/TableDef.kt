@@ -40,7 +40,7 @@ fun CreateTableRequest.toTableMetadata(): TableMetadata {
         getPartitionKey(keySchema()),
         getSortKey(keySchema()),
         TableStatus.ACTIVE,
-        checkLocalSecondaryIndexes(localSecondaryIndexes(), keySchema())
+        checkLocalSecondaryIndexes(localSecondaryIndexes(), keySchema(), attributeDefinitions())
     )
 }
 
@@ -56,9 +56,13 @@ private fun getSortKey(keySchema: List<KeySchemaElement>) =
 
 private fun checkLocalSecondaryIndexes(
     indexes: List<LocalSecondaryIndex>,
-    tableKeys: List<KeySchemaElement>
+    tableKeys: List<KeySchemaElement>,
+    attributeDefinitions: List<AttributeDefinition>
 ): Map<String, LocalSecondaryIndex> {
     if (indexes.isEmpty()) {
+        dynamoRequires (tableKeys.size == attributeDefinitions.size) {
+            "The number of attributes in key schema must match the number of attributes defined in attribute definitions."
+        }
         return emptyMap()
     }
 
@@ -71,6 +75,9 @@ private fun checkLocalSecondaryIndexes(
         "Cannot have more than 5 local secondary indexes per table"
     }
     val indexesMap = mutableMapOf<String, LocalSecondaryIndex>()
+    val keySchemaElements = mutableSetOf<KeySchemaElement>()
+    keySchemaElements.addAll(tableKeys)
+
     indexes.forEach {
         val name = it.indexName()
         dynamoRequires(!indexesMap.contains(name)) {
@@ -80,11 +87,11 @@ private fun checkLocalSecondaryIndexes(
         dynamoRequires(name != null && name.length in 3..255 && name.matches(checkIndexName)) {
             """
                 Invalid table/index name.  Table/index names must be between 3 and 255 characters long, 
-                and may contain only the characters a-z, A-Z, 0-9, '_', '-', and '.
+                and may contain only the characters a-z, A-Z, 0-9, '_', '-', and '.'
             """.trimIndent()
         }
 
-        dynamoRequires(it.projection() != null) {
+        dynamoRequires(it.projection() != null && it.projection().projectionType() != null) {
             "Indexes must have a projection specified"
         }
 
@@ -106,8 +113,14 @@ private fun checkLocalSecondaryIndexes(
             )
 
         }
+        keySchemaElements.addAll(it.keySchema())
         indexesMap[name] = it
     }
+
+    dynamoRequires (keySchemaElements.size == attributeDefinitions.size) {
+        "The number of attributes in key schema must match the number of attributes defined in attribute definitions."
+    }
+
     return indexesMap
 }
 

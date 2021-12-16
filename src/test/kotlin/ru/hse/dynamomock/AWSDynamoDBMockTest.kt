@@ -85,75 +85,12 @@ internal open class AWSDynamoDBMockTest {
             AttributeDefinition.builder().attributeName(List(100){ 'a' }.joinToString("")).attributeType("S").build()
         )
 
-        private fun getKeySchemaElements(partitionKeyIndex: Int, lsiIndex: Int): List<KeySchemaElement> =
-            listOf(
-                KeySchemaElement.builder().attributeName(attributeDefinitionPool[partitionKeyIndex].attributeName())
-                    .keyType(KeyType.HASH).build(),
-                KeySchemaElement.builder().attributeName(attributeDefinitionPool[lsiIndex].attributeName())
-                    .keyType(KeyType.RANGE).build()
-            )
-
-        private fun buildLocalSecondaryIndex(
-            indexName: String?, projectionType: ProjectionType,
-            partitionKeyIndex: Int, lsiIndex: Int) =
-            LocalSecondaryIndex.builder()
-            .indexName(indexName)
-            .projection(Projection.builder().projectionType(projectionType).build())
-            .keySchema(getKeySchemaElements(partitionKeyIndex, lsiIndex))
-            .build()
-
-        @JvmStatic
-        protected fun localSecondaryIndexesPool(partitionKeyIndex: Int) = listOf(
-            listOf(buildLocalSecondaryIndex("cooold", ProjectionType.ALL, partitionKeyIndex, 1)),
-            listOf(
-                buildLocalSecondaryIndex("sweaterweather", ProjectionType.ALL, partitionKeyIndex, 1),
-                buildLocalSecondaryIndex("coldplay", ProjectionType.KEYS_ONLY, partitionKeyIndex, 4),
-            ),
-            listOf(
-                buildLocalSecondaryIndex("everyminute", ProjectionType.ALL, partitionKeyIndex, 8),
-                buildLocalSecondaryIndex("and", ProjectionType.KEYS_ONLY, partitionKeyIndex, 6),
-                buildLocalSecondaryIndex("everyhour", ProjectionType.INCLUDE, partitionKeyIndex, 5),
-                buildLocalSecondaryIndex("imisssu", ProjectionType.ALL, partitionKeyIndex, 0)
-            ),
-            listOf(
-                buildLocalSecondaryIndex("1", ProjectionType.KEYS_ONLY, partitionKeyIndex, 9),
-                buildLocalSecondaryIndex("2", ProjectionType.KEYS_ONLY, partitionKeyIndex, 6),
-                buildLocalSecondaryIndex("3", ProjectionType.INCLUDE, partitionKeyIndex, 5),
-                buildLocalSecondaryIndex("4", ProjectionType.ALL, partitionKeyIndex, 0),
-                buildLocalSecondaryIndex("5", ProjectionType.KEYS_ONLY, partitionKeyIndex, 9),
-                buildLocalSecondaryIndex("6", ProjectionType.KEYS_ONLY, partitionKeyIndex, 9)
-            ),
-            listOf(
-                buildLocalSecondaryIndex("sameTableName", ProjectionType.KEYS_ONLY, partitionKeyIndex, 9),
-                buildLocalSecondaryIndex("sameTableName", ProjectionType.KEYS_ONLY, partitionKeyIndex, 6)
-            ),
-            listOf(
-                buildLocalSecondaryIndex("wrongIndexName,,,,,:)", ProjectionType.KEYS_ONLY, partitionKeyIndex, 9)
-            ),
-            listOf(
-                buildLocalSecondaryIndex(null, ProjectionType.KEYS_ONLY, partitionKeyIndex, 9)
-            ),
-            listOf(
-                LocalSecondaryIndex.builder()
-                    .indexName("indexName")
-                    .keySchema(getKeySchemaElements(partitionKeyIndex, 9))
-                    .build()
-            ),
-            listOf(
-                LocalSecondaryIndex.builder()
-                    .indexName("indexName")
-                    .projection(Projection.builder().projectionType(ProjectionType.KEYS_ONLY).build())
-                    .build()
-            )
-        )
-
         @JvmStatic
         protected fun createTableMetadata(
             name: String,
             partitionKeyIndex: Int,
             sortKeyIndex: Int?,
-            creationDateTime: Instant,
-            lsiIndex: Int? = null,
+            creationDateTime: Instant
         ) = TableMetadata(
             name,
             listOfNotNull(
@@ -163,10 +100,7 @@ internal open class AWSDynamoDBMockTest {
             attributeDefinitionPool[partitionKeyIndex].attributeName(),
             sortKeyIndex?.let { attributeDefinitionPool[it].attributeName() },
             TableStatus.ACTIVE,
-            lsiIndex?.let{
-                val list = localSecondaryIndexesPool(partitionKeyIndex)[lsiIndex]
-                list.associateBy { it.indexName()!! }
-            } ?: emptyMap(),
+            emptyMap(),
             creationDateTime
         )
 
@@ -180,9 +114,7 @@ internal open class AWSDynamoDBMockTest {
             createTableMetadata("ANOTHER.._AAAA", 1, 11, Instant.now()),
             createTableMetadata("ke.k1e_ke", 7, null, Instant.ofEpochMilli(991222222222222)),
             createTableMetadata("SantaClaus", 10, 8, Instant.ofEpochMilli(666)),
-            createTableMetadata("El_lik_sir", 2, 7, Instant.ofEpochMilli(666)),
-            createTableMetadata("beat", 4, 2, Instant.now(), 0),
-            createTableMetadata("moon", 4, 2, Instant.now(), 1)
+            createTableMetadata("El_lik_sir", 2, 7, Instant.ofEpochMilli(666))
         ) + attributeDefinitionPool.indices.flatMap { i ->
             listOf(
                 createTableMetadata("TEST_N_$i", i, null, Instant.ofEpochMilli(123241424222 * i)),
