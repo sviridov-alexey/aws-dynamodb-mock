@@ -958,17 +958,11 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test local secondary indexes without sort key`() = test {
+    fun `test local secondary indexes without sort key`() = failed<DynamoDbException> {
         partKeyType = AttributeType.S
         val index = "myLovelyIndex"
         localSecondaryIndexes = listOf(
             localSecondaryIndex(index, ProjectionType.ALL, emptyList()) to AttributeType.S
-        )
-        items = listOf(
-            mapOf(partKey to atS("wow"), index to atS("what"), "a" to atN("1")),
-            mapOf(partKey to atS("wow1"), index to atS("no"), "b" to atS("a")),
-            mapOf(partKey to atS("wow2"), index to atS("what"), "c" to atSS("a", "b")),
-            mapOf(partKey to atS("wow3"))
         )
         query = query(
             tableName = tableName,
@@ -977,7 +971,6 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             expressionAttributeValues = mapOf(":val" to atS("wow"), ":other" to atS("what")),
             select = Select.ALL_PROJECTED_ATTRIBUTES
         )
-        expected = ExpectedItems(items = listOf(items[0]), scannedCount = 1, ignoreOrder = true)
     }
 
     @Test
