@@ -23,7 +23,9 @@ internal open class AWSDynamoDBMockTest {
                 KeySchemaElement.builder().attributeName(partitionKey).keyType(KeyType.HASH).build(),
                 sortKey?.let { KeySchemaElement.builder().attributeName(it).keyType(KeyType.RANGE).build() }
             )
-        ).build()
+        )
+        .localSecondaryIndexes(localSecondaryIndexes.values)
+        .build()
 
     protected fun TableMetadata.toDeleteTableRequest(): DeleteTableRequest = DeleteTableRequest.builder()
         .tableName(tableName)
@@ -98,6 +100,7 @@ internal open class AWSDynamoDBMockTest {
             attributeDefinitionPool[partitionKeyIndex].attributeName(),
             sortKeyIndex?.let { attributeDefinitionPool[it].attributeName() },
             TableStatus.ACTIVE,
+            emptyMap(),
             creationDateTime
         )
 
@@ -111,7 +114,7 @@ internal open class AWSDynamoDBMockTest {
             createTableMetadata("ANOTHER.._AAAA", 1, 11, Instant.now()),
             createTableMetadata("ke.k1e_ke", 7, null, Instant.ofEpochMilli(991222222222222)),
             createTableMetadata("SantaClaus", 10, 8, Instant.ofEpochMilli(666)),
-            createTableMetadata("El_lik_sir", 2, 7, Instant.ofEpochMilli(666)),
+            createTableMetadata("El_lik_sir", 2, 7, Instant.ofEpochMilli(666))
         ) + attributeDefinitionPool.indices.flatMap { i ->
             listOf(
                 createTableMetadata("TEST_N_$i", i, null, Instant.ofEpochMilli(123241424222 * i)),

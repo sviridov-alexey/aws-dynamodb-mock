@@ -59,9 +59,6 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         dynamoRequires(request.limit() == null || request.limit() > 0) {
             "Limit must be >= 1."
         }
-        dynamoRequires(request.indexName() == null) {
-            "Indexes are not supported in query yet."
-        }
         dynamoRequires(request.consistentRead() != false) {
             "Non-consistent read is not supported in query yet."
         }
@@ -72,14 +69,24 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         }
 
         val table = tablesMetadata.getValue(tableName)
+        val index = request.indexName()?.let { table.localSecondaryIndex(it) }
         val keyConditions = request.retrieveKeyConditions()
         keyConditions[table.partitionKey].let {
             dynamoRequires(it != null && it.comparisonOperator() == ComparisonOperator.EQ) {
                 "Partition key must use '=' operator."
             }
         }
-        dynamoRequires(keyConditions.size <= 2 && !(keyConditions.size == 2 && table.sortKey !in keyConditions)) {
-            "Only partition and sort keys can be used in key conditions."
+        dynamoRequires(keyConditions.size <= 2) {
+            "Length of key conditions must be 1 or 2."
+        }
+        if (index == null) {
+            dynamoRequires(keyConditions.size == 1 || table.sortKey in keyConditions) {
+                "Only partition and sort keys can be used in key conditions."
+            }
+        } else {
+            dynamoRequires(keyConditions.size == 1 || index.sortKey in keyConditions) {
+                "Only partition key and index sort key can be used in key conditions."
+            }
         }
 
         val items = storage.query(tableName, keyConditions).let {
@@ -119,7 +126,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             responseBuilder.lastEvaluatedKey(DefaultSdkAutoConstructMap.getInstance())
         }
 
-        val transformer = request.retrieveAttributesTransformer()
+        val transformer = request.retrieveAttributesTransformer(table)
         if (request.select() != Select.COUNT) {
             responseBuilder.items(filteredItems.map(transformer))
         } else {
@@ -135,16 +142,17 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
         val itemsList = request.item().map { (k, v) -> AttributeInfo(k, v.toAttributeTypeInfo()) }
 
-        val attributes = getAttributesFromReturnValues(
-            request.returnValues(),
-            DBGetItemRequest(tableName, partitionKey, sortKey)
-        )
+        val previousItem = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))?.associate {
+            it.name to it.type.toAttributeValue()
+        }
 
-        if (attributes != null) {
+        if (previousItem != null) {
             storage.updateItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
         } else {
             storage.putItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
         }
+
+        val attributes = getAttributesFromReturnValues(request.returnValues(), previousItem)
 
         return PutItemResponse.builder()
             .attributes(attributes)
@@ -172,12 +180,15 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         checkNumOfKeys(tableName, request.key())
         val (partitionKey, sortKey) = getRequestMetadata(tableName, request.key())
 
-        val attributes = getAttributesFromReturnValues(
-            request.returnValues(),
-            DBGetItemRequest(tableName, partitionKey, sortKey)
-        )
+        val previousItem = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))?.associate {
+            it.name to it.type.toAttributeValue()
+        }
 
-        storage.deleteItem(DBDeleteItemRequest(tableName, partitionKey, sortKey))
+        if (previousItem != null) {
+            storage.deleteItem(DBDeleteItemRequest(tableName, partitionKey, sortKey))
+        }
+
+        val attributes = getAttributesFromReturnValues(request.returnValues(), previousItem)
 
         return DeleteItemResponse.builder()
             .attributes(attributes)
@@ -245,14 +256,15 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         }
 
         putItemRequests.forEach {
-            val attributes = getAttributesFromReturnValues(
-                ReturnValue.ALL_OLD,
-                DBGetItemRequest(it.tableName, it.partitionKey, it.sortKey)
-            )
-            if (attributes == null) {
-                storage.putItem(it)
-            } else {
+            val previousItem =
+                storage.getItem(DBGetItemRequest(it.tableName, it.partitionKey, it.sortKey))?.associate { v ->
+                    v.name to v.type.toAttributeValue()
+                }
+
+            if (previousItem != null) {
                 storage.updateItem(it)
+            } else {
+                storage.putItem(it)
             }
         }
         deleteItemRequests.forEach { storage.deleteItem(it) }
@@ -275,12 +287,13 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         }
         val firstRow = rows.removeFirstOrNull() ?: throw AWSMockCSVException("The file is empty")
         firstRow.forEach {
-            val value = it.split("|").map{ v -> v.trim() }
+            val value = it.split("|").map { v -> v.trim() }
             if (value.size != 2) {
                 throw AWSMockCSVException("Wrong value format. Use <column_name>|<type>")
             }
 
-            val (columnName, type) = value.zipWithNext().firstOrNull() ?: throw AWSMockCSVException("Wrong value format. Use <column_name>|")
+            val (columnName, type) = value.zipWithNext().firstOrNull()
+                ?: throw AWSMockCSVException("Wrong value format. Use <column_name>|")
             if (type !in allowedTypes) {
                 throw AWSMockCSVException("Function loadItems supports all types except B, BS")
             }
@@ -302,7 +315,11 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         }
     }
 
-    private fun getKeyFromMetadata(keyName: String, keys: Map<String, AttributeValue>, attributeDefinitions: List<AttributeDefinition>): Key {
+    private fun getKeyFromMetadata(
+        keyName: String,
+        keys: Map<String, AttributeValue>,
+        attributeDefinitions: List<AttributeDefinition>
+    ): Key {
         val keyAttributeValue = keys[keyName] ?: throw dynamoException("One of the required keys was not given a value")
         val (keyType, key) = toKey(keyName, keyAttributeValue)
         val expectedKeyType = attributeDefinitions.firstOrNull { it.attributeName() == keyName }
@@ -334,14 +351,10 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
     private fun getAttributesFromReturnValues(
         returnValues: ReturnValue?,
-        request: DBGetItemRequest
+        prevItem: Map<String, AttributeValue>?
     ): Map<String, AttributeValue>? =
         when (returnValues) {
-            ReturnValue.ALL_OLD -> {
-                storage.getItem(request)?.associate {
-                    it.name to it.type.toAttributeValue()
-                }
-            }
+            ReturnValue.ALL_OLD -> prevItem
             ReturnValue.NONE, null -> null
             else -> throw dynamoException("Return values set to invalid value")
         }

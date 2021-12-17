@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import ru.hse.dynamomock.model.TableMetadata
 import ru.hse.dynamomock.model.query.grammar.*
+import ru.hse.dynamomock.model.sortKey
 import ru.hse.dynamomock.model.toAttributeTypeInfo
 import software.amazon.awssdk.services.dynamodb.model.*
 import software.amazon.awssdk.services.dynamodb.model.ComparisonOperator.*
@@ -24,9 +25,11 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
         var tableName: String = "my_table_name"
         var partKey: String = "part_key"
         var sortKey: String = "sort_key"
+        var defaultLsiName: String = "default_index_name"
 
         var query by Delegates.notNull<QueryRequest>()
         var items by Delegates.notNull<List<Map<String, AttributeValue>>>()
+        var localSecondaryIndexes = emptyList<Pair<LocalSecondaryIndex, AttributeType>>()
 
         var expected by Delegates.notNull<Expected>()
 
@@ -36,15 +39,17 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             val metadata = TableMetadata(
                 tableName = tableName,
                 attributeDefinitions = listOfNotNull(
-                    AttributeDefinition.builder().attributeType(partKeyType.toString()).attributeName(partKey)
-                        .build(),
+                    AttributeDefinition.builder().attributeType(partKeyType.toString()).attributeName(partKey).build(),
                     sortKeyType?.let {
                         AttributeDefinition.builder().attributeType(it.toString()).attributeName(sortKey).build()
                     }
-                ),
+                ) + localSecondaryIndexes.map { (index, type) ->
+                    AttributeDefinition.builder().attributeType(type.toString()).attributeName(index.sortKey).build()
+                },
                 partitionKey = partKey,
                 sortKey = sortKeyType?.let { sortKey },
                 tableStatus = TableStatus.ACTIVE,
+                localSecondaryIndexes = localSecondaryIndexes.associate { it.first.indexName() to it.first },
                 creationDateTime = Instant.now()
             )
 
@@ -54,17 +59,40 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
                 expected.assert(this)
             }
         }
+
+        fun localSecondaryIndex(
+            attributeName: String,
+            projectionType: ProjectionType,
+            nonKeyAttributes: List<String>,
+            indexName: String = defaultLsiName,
+        ): LocalSecondaryIndex = LocalSecondaryIndex
+            .builder()
+            .indexName(indexName)
+            .keySchema(
+                KeySchemaElement.builder().attributeName(partKey).keyType(KeyType.HASH).build(),
+                KeySchemaElement.builder().attributeName(attributeName).keyType(KeyType.RANGE).build()
+            )
+            .projection(Projection.builder().projectionType(projectionType).nonKeyAttributes(nonKeyAttributes).build())
+            .build()
     }
 
     private sealed interface Expected {
         fun assert(response: QueryResponse)
     }
 
-    private data class ExpectedItems(val items: List<Map<String, AttributeValue>>, val scannedCount: Int) : Expected {
+    private data class ExpectedItems(
+        val items: List<Map<String, AttributeValue>>,
+        val scannedCount: Int,
+        val ignoreOrder: Boolean = false
+    ) : Expected {
         override fun assert(response: QueryResponse) {
             assertEquals(items.size, response.count())
             assertEquals(scannedCount, response.scannedCount())
-            assertEquals(items, response.items())
+            if (!ignoreOrder) {
+                assertEquals(items, response.items())
+            } else {
+                assertEquals(items.toSet(), response.items().toSet())
+            }
             assertNotNull(response.lastEvaluatedKey())
         }
     }
@@ -106,6 +134,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
 
     private fun query(
         tableName: String,
+        indexName: String? = null,
         keyConditions: Map<String, Condition>? = null,
         keyConditionExpression: String? = null,
         queryFilter: Map<String, Condition>? = null,
@@ -124,6 +153,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             .tableName(tableName)
             .expressionAttributeNames(expressionAttributeNames)
             .expressionAttributeValues(expressionAttributeValues)
+        indexName?.let { builder.indexName(it) }
         keyConditions?.let { builder.keyConditions(it) }
         keyConditionExpression?.let { builder.keyConditionExpression(it) }
         queryFilter?.let { builder.queryFilter(it) }
@@ -841,6 +871,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             partitionKey = partKey,
             sortKey = sortKey,
             tableStatus = TableStatus.ACTIVE,
+            localSecondaryIndexes = emptyMap(),
             creationDateTime = Instant.now()
         )
 
@@ -868,6 +899,78 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
         }
 
         assertEquals(expectedItems, result)
+    }
+
+    @Test
+    fun `test local secondary indexes with sort key`() = test(autoRun = false) {
+        partKeyType = AttributeType.S
+        sortKeyType = AttributeType.N
+        val index = "ind"
+        localSecondaryIndexes = listOf(
+            localSecondaryIndex(index, ProjectionType.KEYS_ONLY, emptyList()) to AttributeType.S
+        )
+        items = listOf(
+            mapOf(partKey to atS("wow"), sortKey to atN("11"), index to atS("what"), "a" to atN("1")),
+            mapOf(partKey to atS("wow"), sortKey to atN("10"), index to atS("no"), "b" to atS("a")),
+            mapOf(partKey to atS("wow"), sortKey to atN("-1"), index to atS("what"), "c" to atSS("a", "b")),
+            mapOf(partKey to atS("No wow"), sortKey to atN("4"), index to atS("what")),
+            mapOf(partKey to atS("no wow"), sortKey to atN("5"))
+        )
+        query = query(
+            tableName = tableName,
+            indexName = defaultLsiName,
+            keyConditionExpression = "$partKey = :val and $index = :other",
+            expressionAttributeValues = mapOf(":val" to atS("wow"), ":other" to atS("what"))
+        )
+        expected = ExpectedItems(
+            items = listOf(items[0], items[2]).map { item ->
+                item.filterKeys { it in listOf(partKey, sortKey, index) }
+            },
+            scannedCount = 2,
+            ignoreOrder = true
+        )
+        test()
+
+        localSecondaryIndexes = listOf(
+            localSecondaryIndex(index, ProjectionType.ALL, emptyList()) to AttributeType.S
+        )
+        expected = ExpectedItems(items = listOf(items[0], items[2]), scannedCount = 2, ignoreOrder = true)
+        test()
+
+        localSecondaryIndexes = listOf(
+            localSecondaryIndex(index, ProjectionType.INCLUDE, listOf("a")) to AttributeType.S
+        )
+        expected = ExpectedItems(
+            items = listOf(items[0], items[2]).map { item ->
+                item.filterKeys { it in listOf(partKey, sortKey, index, "a") }
+            },
+            scannedCount = 2,
+            ignoreOrder = true
+        )
+        test()
+
+        localSecondaryIndexes = listOf(
+            localSecondaryIndex(index, ProjectionType.KEYS_ONLY, emptyList()) to AttributeType.S
+        )
+        query = query.toBuilder().select(Select.ALL_ATTRIBUTES).build()
+        expected = ExpectedItems(items = listOf(items[0], items[2]), scannedCount = 2, ignoreOrder = true)
+        test()
+    }
+
+    @Test
+    fun `test local secondary indexes without sort key`() = failed<DynamoDbException> {
+        partKeyType = AttributeType.S
+        val index = "myLovelyIndex"
+        localSecondaryIndexes = listOf(
+            localSecondaryIndex(index, ProjectionType.ALL, emptyList()) to AttributeType.S
+        )
+        query = query(
+            tableName = tableName,
+            indexName = defaultLsiName,
+            keyConditionExpression = "$partKey = :val and myLovelyIndex = :other",
+            expressionAttributeValues = mapOf(":val" to atS("wow"), ":other" to atS("what")),
+            select = Select.ALL_PROJECTED_ATTRIBUTES
+        )
     }
 
     @Test
@@ -1062,6 +1165,19 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
                 limit = -10
             )
         }
+    }
+
+    @Test
+    fun `test invalid name of local secondary index`() = failed<DynamoDbException> {
+        localSecondaryIndexes = listOf(
+            localSecondaryIndex("hi", ProjectionType.KEYS_ONLY, emptyList(), "wow") to AttributeType.S
+        )
+        query = query(
+            tableName = tableName,
+            indexName = "other",
+            keyConditionExpression = "$partKey = :val",
+            expressionAttributeValues = mapOf(":val" to atS("kek"))
+        )
     }
 }
 

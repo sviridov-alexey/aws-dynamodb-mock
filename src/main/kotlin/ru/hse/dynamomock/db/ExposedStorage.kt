@@ -12,6 +12,7 @@ import ru.hse.dynamomock.model.Key
 import software.amazon.awssdk.services.dynamodb.model.ComparisonOperator
 import software.amazon.awssdk.services.dynamodb.model.Condition
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException
+import java.math.BigDecimal
 import java.security.MessageDigest
 import java.util.*
 
@@ -40,12 +41,8 @@ class ExposedStorage : DataStorageLayer {
     override fun query(tableName: String, keyConditions: Map<String, Condition>): List<List<AttributeInfo>> {
         val table = getTable(tableName)
         val keys = keyConditions.map { (name, cond) ->
-            val strs = listOf(
-                table.partitionKeyName to table.stringPartitionKey, table.sortKeyName to table.stringSortKey
-            ).filter { it.first == name }.map { it.second }
-            val nums = listOf(
-                table.partitionKeyName to table.numPartitionKey, table.sortKeyName to table.numSortKey
-            ).filter { it.first == name }.map { it.second }
+            val strs = table.namesToStringColumns.filter { it.first == name }.map { it.second }
+            val nums = table.namesToNumColumns.filter { it.first == name }.map { it.second }
 
             strs.firstNotNullOfOrNull { cond.toOp(it) }
                 ?: nums.firstNotNullOfOrNull { cond.toOp(it) }
@@ -99,6 +96,16 @@ class ExposedStorage : DataStorageLayer {
                         is NumKey -> item[numSortKey] = request.sortKey.attributeValue
                     }
                 }
+
+                request.fieldValues.forEach { (name, info) ->
+                    lsiNames.withIndex().firstOrNull { it.value == name }?.let { (index, _) ->
+                        when (val value = info.value) {
+                            is BigDecimal -> item[numLsiKeys[index]] = value
+                            is String -> item[stringLsiKeys[index]] = value
+                            // TODO B
+                        }
+                    }
+                }
             }
         }
     }
@@ -145,14 +152,32 @@ class ExposedStorage : DataStorageLayer {
         private val id = integer("id").autoIncrement()
         val attributes = text("attributes")
         val stringPartitionKey = text("stringPartitionKey").nullable().default(null)
-        val numPartitionKey = decimal("numPartitionKey", 20, 0).nullable().default(null)
+        val numPartitionKey = decimal("numPartitionKey", PRECISION, SCALE).nullable().default(null)
         val stringSortKey = text("stringSortKey").nullable().default(null)
-        val numSortKey = decimal("numSortKey", 20, 0).nullable().default(null)
+        val numSortKey = decimal("numSortKey", PRECISION, SCALE).nullable().default(null)
+
+        val stringLsiKeys = List(metadata.localSecondaryIndexes.size) { i ->
+            text("stringLSISortKey$i").nullable().default(null)
+        }
+        val numLsiKeys = List(metadata.localSecondaryIndexes.size) { i ->
+            decimal("numLSISortKey$i", PRECISION, SCALE).nullable().default(null)
+        }
 
         override val primaryKey: PrimaryKey = PrimaryKey(id)
 
         val partitionKeyName = metadata.partitionKey
         val sortKeyName = metadata.sortKey
+        val lsiNames = metadata.localSecondaryIndexes.map { it.value.sortKey }
+
+        val namesToStringColumns =
+            listOf(partitionKeyName to stringPartitionKey, sortKeyName to stringSortKey) + lsiNames.zip(stringLsiKeys)
+        val namesToNumColumns =
+            listOf(partitionKeyName to numPartitionKey, sortKeyName to numSortKey) + lsiNames.zip(numLsiKeys)
+    }
+
+    companion object {
+        private const val PRECISION = 20
+        private const val SCALE = 0
     }
 }
 
