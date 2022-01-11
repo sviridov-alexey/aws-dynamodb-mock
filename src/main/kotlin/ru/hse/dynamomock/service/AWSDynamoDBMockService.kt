@@ -201,10 +201,13 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         val allowedTypes = ImportableType.values().map { e -> e.name }
         val header = mutableListOf<Pair<String, String>>()
         val rows = mutableListOf<List<String>>()
+
+        val resource = object {}.javaClass.classLoader.getResource(fileName)
+        val filePath = if (resource == null) fileName else resource.path
         csvReader {
             delimiter = ';'
             quoteChar = '"'
-        }.open(fileName) {
+        }.open(filePath) {
             readAllAsSequence().forEach { row ->
                 rows.add(row)
             }
