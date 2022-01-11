@@ -4,6 +4,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import ru.hse.dynamomock.exception.dynamoException
 import ru.hse.dynamomock.exception.dynamoRequires
@@ -21,6 +22,8 @@ class ExposedStorage : DataStorageLayer {
         Database.connect("jdbc:h2:mem:${UUID.randomUUID()};DB_CLOSE_DELAY=-1", "org.h2.Driver", "sa", "")
 
     private val tables = mutableMapOf<String, DynamoTable>()
+
+    override fun close() = TransactionManager.closeAndUnregister(database)
 
     override fun createTable(tableMetadata: TableMetadata) {
         val name = hashTableName(tableMetadata.tableName)

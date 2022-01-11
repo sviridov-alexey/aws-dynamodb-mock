@@ -1,17 +1,20 @@
 package ru.hse.dynamomock
 
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import ru.hse.dynamomock.model.TableMetadata
 import software.amazon.awssdk.services.dynamodb.model.*
 import java.time.Instant
-import kotlin.properties.Delegates
 
 internal open class AWSDynamoDBMockTest {
-    protected var mock: AWSDynamoDBMock by Delegates.notNull()
+    protected lateinit var mock: AWSDynamoDBMock
         private set
 
     @BeforeEach
     fun init() {
+        if (::mock.isInitialized) {
+            mock.close()
+        }
         mock = AWSDynamoDBMock()
     }
 

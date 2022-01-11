@@ -27,6 +27,8 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             throw dynamoException("Member must satisfy enum value set: [B, N, S]")
         }
 
+    fun close() = storage.close()
+
     fun createTable(request: CreateTableRequest): TableDescription {
         dynamoRequires(request.tableName() !in tablesMetadata) {
             "Table ${request.tableName()} already exists. Cannot create."

@@ -12,9 +12,7 @@ import java.util.concurrent.CompletableFuture
 class AWSDynamoDBMock : DynamoDbClient {
     private val service by lazy { AWSDynamoDBMockService(ExposedStorage()) }
 
-    override fun close() {
-        TODO("Not yet implemented")
-    }
+    override fun close() = service.close()
 
     override fun serviceName(): String = SERVICE_NAME
 
