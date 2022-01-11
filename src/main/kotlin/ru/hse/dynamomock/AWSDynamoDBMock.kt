@@ -4,8 +4,10 @@ package ru.hse.dynamomock
 
 import ru.hse.dynamomock.db.ExposedStorage
 import ru.hse.dynamomock.service.AWSDynamoDBMockService
+import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.*
+import java.util.concurrent.CompletableFuture
 
 class AWSDynamoDBMock : DynamoDbClient {
     private val service by lazy { AWSDynamoDBMockService(ExposedStorage()) }
@@ -62,4 +64,62 @@ class AWSDynamoDBMock : DynamoDbClient {
     companion object {
         private const val SERVICE_NAME = "dynamodb"
     }
+}
+
+class AWSDynamoDBAsyncMock : DynamoDbAsyncClient {
+    private val mock = AWSDynamoDBMock()
+
+    override fun close() = mock.close()
+
+    override fun serviceName(): String = mock.serviceName()
+
+    override fun createTable(
+        createTableRequest: CreateTableRequest
+    ): CompletableFuture<CreateTableResponse> = CompletableFuture.supplyAsync {
+        mock.createTable(createTableRequest)
+    }
+
+    override fun deleteTable(
+        deleteTableRequest: DeleteTableRequest
+    ): CompletableFuture<DeleteTableResponse> = CompletableFuture.supplyAsync {
+        mock.deleteTable(deleteTableRequest)
+    }
+
+    override fun describeTable(
+        describeTableRequest: DescribeTableRequest
+    ): CompletableFuture<DescribeTableResponse> = CompletableFuture.supplyAsync {
+        mock.describeTable(describeTableRequest)
+    }
+
+    override fun query(
+        queryRequest: QueryRequest
+    ): CompletableFuture<QueryResponse> = CompletableFuture.supplyAsync {
+        mock.query(queryRequest)
+    }
+
+    override fun putItem(
+        putItemRequest: PutItemRequest
+    ): CompletableFuture<PutItemResponse> = CompletableFuture.supplyAsync {
+        mock.putItem(putItemRequest)
+    }
+
+    override fun getItem(
+        getItemRequest: GetItemRequest
+    ): CompletableFuture<GetItemResponse> = CompletableFuture.supplyAsync {
+        mock.getItem(getItemRequest)
+    }
+
+    override fun deleteItem(
+        deleteItemRequest: DeleteItemRequest
+    ): CompletableFuture<DeleteItemResponse> = CompletableFuture.supplyAsync {
+        mock.deleteItem(deleteItemRequest)
+    }
+
+    override fun batchWriteItem(
+        batchWriteItemRequest: BatchWriteItemRequest
+    ): CompletableFuture<BatchWriteItemResponse> = CompletableFuture.supplyAsync {
+        mock.batchWriteItem(batchWriteItemRequest)
+    }
+
+    fun loadCSV(filename: String, tableName: String) = mock.loadCSV(filename, tableName)
 }
