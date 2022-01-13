@@ -56,8 +56,8 @@ publishing {
         maven {
             url = uri("https://maven.pkg.github.com/sviridov-alexey/aws-dynamodb-mock")
             credentials {
-                username = ""
-                password = ""
+                username = System.getenv("GITHUB_ACTOR")
+                password = System.getenv("GITHUB_TOKEN")
             }
         }
     }
