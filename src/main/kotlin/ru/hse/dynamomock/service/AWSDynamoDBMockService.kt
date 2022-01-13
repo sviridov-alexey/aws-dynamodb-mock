@@ -9,8 +9,12 @@ import ru.hse.dynamomock.model.*
 import ru.hse.dynamomock.model.query.*
 import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList
 import software.amazon.awssdk.core.util.DefaultSdkAutoConstructMap
+<<<<<<< HEAD
 import software.amazon.awssdk.services.dynamodb.model.*
 import java.util.*
+=======
+import java.io.InputStream
+>>>>>>> d2b5477 (change to inputstream)
 
 class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     private val tablesMetadata = mutableMapOf<String, TableMetadata>()
@@ -197,21 +201,31 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             .build()
     }
 
-    fun loadCSV(fileName: String, tableName: String) {
-        val allowedTypes = ImportableType.values().map { e -> e.name }
-        val header = mutableListOf<Pair<String, String>>()
+    fun loadCSV(filePath: String, tableName: String) {
         val rows = mutableListOf<List<String>>()
-
-        val resource = object {}.javaClass.classLoader.getResource(fileName)
-        val filePath = if (resource == null) fileName else resource.path
         csvReader {
             delimiter = ';'
             quoteChar = '"'
         }.open(filePath) {
-            readAllAsSequence().forEach { row ->
-                rows.add(row)
+                readAllAsSequence().forEach { row ->
+                    rows.add(row)
+                }
             }
-        }
+        processCSV(rows, tableName)
+    }
+
+    fun loadCSV(inputStream: InputStream, tableName: String) {
+        val rows = csvReader {
+            delimiter = ';'
+            quoteChar = '"'
+        }.readAll(inputStream).toMutableList()
+        processCSV(rows, tableName)
+    }
+
+    private fun processCSV(rows: MutableList<List<String>>, tableName: String) {
+        val allowedTypes = ImportableType.values().map { e -> e.name }
+        val header = mutableListOf<Pair<String, String>>()
+
         val firstRow = rows.removeFirstOrNull() ?: throw AWSMockCSVException("The file is empty")
         firstRow.forEach {
             val value = it.split("|").map { v -> v.trim() }
@@ -240,6 +254,20 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                     .build()
             )
         }
+    }
+
+    private fun readCSV(filePath: String): MutableList<List<String>> {
+        val rows = mutableListOf<List<String>>()
+        csvReader {
+            delimiter = ';'
+            quoteChar = '"'
+        }
+            .open(filePath) {
+            readAllAsSequence().forEach { row ->
+                rows.add(row)
+            }
+        }
+        return rows
     }
 
     private fun getKeyFromMetadata(
