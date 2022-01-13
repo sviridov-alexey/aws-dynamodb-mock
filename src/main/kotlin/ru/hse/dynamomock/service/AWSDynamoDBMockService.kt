@@ -256,20 +256,6 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         }
     }
 
-    private fun readCSV(filePath: String): MutableList<List<String>> {
-        val rows = mutableListOf<List<String>>()
-        csvReader {
-            delimiter = ';'
-            quoteChar = '"'
-        }
-            .open(filePath) {
-            readAllAsSequence().forEach { row ->
-                rows.add(row)
-            }
-        }
-        return rows
-    }
-
     private fun getKeyFromMetadata(
         keyName: String,
         keys: Map<String, AttributeValue>,
