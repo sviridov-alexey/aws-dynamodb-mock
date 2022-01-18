@@ -1,17 +1,16 @@
 package ru.hse.dynamomock.service
 
 import com.github.doyaaaaaken.kotlincsv.dsl.csvReader
-import ru.hse.dynamomock.exception.AWSMockCSVException
 import ru.hse.dynamomock.db.DataStorageLayer
+import ru.hse.dynamomock.exception.AWSMockCSVException
 import ru.hse.dynamomock.exception.dynamoException
 import ru.hse.dynamomock.exception.dynamoRequires
 import ru.hse.dynamomock.model.*
-import software.amazon.awssdk.services.dynamodb.model.*
-import java.util.Base64
-import ru.hse.dynamomock.model.query.retrieveAttributesTransformer
-import ru.hse.dynamomock.model.query.retrieveFilterExpression
-import ru.hse.dynamomock.model.query.retrieveKeyConditions
+import ru.hse.dynamomock.model.query.*
+import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList
 import software.amazon.awssdk.core.util.DefaultSdkAutoConstructMap
+import software.amazon.awssdk.services.dynamodb.model.*
+import java.util.*
 
 class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     private val tablesMetadata = mutableMapOf<String, TableMetadata>()
@@ -56,86 +55,9 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         return tablesMetadata.getValue(name).toTableDescription()
     }
 
-    // TODO take into account that it's impossible to use expression-like and not-expression-like at the same query
-    fun query(request: QueryRequest): QueryResponse {
-        dynamoRequires(request.limit() == null || request.limit() > 0) {
-            "Limit must be >= 1."
-        }
-        dynamoRequires(request.consistentRead() != false) {
-            "Non-consistent read is not supported in query yet."
-        }
+    fun query(request: QueryRequest): QueryResponse = request.toSelectRequest().select().toQueryResponse()
 
-        val tableName = request.tableName()
-        dynamoRequires(tableName in tablesMetadata) {
-            "Cannot query from non-existent table $tableName."
-        }
-
-        val table = tablesMetadata.getValue(tableName)
-        val index = request.indexName()?.let { table.localSecondaryIndex(it) }
-        val keyConditions = request.retrieveKeyConditions()
-        keyConditions[table.partitionKey].let {
-            dynamoRequires(it != null && it.comparisonOperator() == ComparisonOperator.EQ) {
-                "Partition key must use '=' operator."
-            }
-        }
-        dynamoRequires(keyConditions.size <= 2) {
-            "Length of key conditions must be 1 or 2."
-        }
-        if (index == null) {
-            dynamoRequires(keyConditions.size == 1 || table.sortKey in keyConditions) {
-                "Only partition and sort keys can be used in key conditions."
-            }
-        } else {
-            dynamoRequires(keyConditions.size == 1 || index.sortKey in keyConditions) {
-                "Only partition key and index sort key can be used in key conditions."
-            }
-        }
-
-        val items = storage.query(tableName, keyConditions).let {
-            if (request.scanIndexForward() != false) it else it.reversed()
-        }.map { item ->
-            item.associate { it.name to it.type.toAttributeValue() }
-        }.let { items ->
-            request.exclusiveStartKey().takeIf { request.hasExclusiveStartKey() }?.let { exclusiveStartKey ->
-                val sortKey = exclusiveStartKey[table.sortKey]
-                items.asSequence()
-                    .dropWhile { it[table.sortKey] != sortKey }
-                    .drop(1)
-                    .toList()
-            } ?: items
-        }.let { items ->
-            request.limit()?.let { items.take(it) } ?: items
-        }
-
-        val filterExpression = request.retrieveFilterExpression()
-        val filteredItems = filterExpression?.let {
-            items.filter {
-                val withoutKeys = it.toMutableMap().apply {
-                    remove(table.partitionKey)
-                    remove(table.sortKey)
-                }
-                filterExpression.evaluate(withoutKeys)
-            }
-        } ?: items
-
-        val responseBuilder = QueryResponse.builder()
-            .count(filteredItems.size)
-            .scannedCount(items.size)
-
-        if (items.size == request.limit()) {
-            responseBuilder.lastEvaluatedKey(items.last())
-        } else {
-            responseBuilder.lastEvaluatedKey(DefaultSdkAutoConstructMap.getInstance())
-        }
-
-        val transformer = request.retrieveAttributesTransformer(table)
-        if (request.select() != Select.COUNT) {
-            responseBuilder.items(filteredItems.map(transformer))
-        } else {
-            responseBuilder.items(DefaultSdkAutoConstructMap.getInstance())
-        }
-        return responseBuilder.build()
-    }
+    fun scan(request: ScanRequest): ScanResponse = request.toSelectRequest().select().toScanResponse()
 
     fun putItem(request: PutItemRequest): PutItemResponse {
         val tableName = request.tableName()
@@ -368,5 +290,87 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         if (keys.size > actualSize) {
             throw dynamoException("The number of conditions on the keys is invalid")
         }
+    }
+
+    // TODO take into account that it's impossible to use expression-like and not-expression-like at the same query
+    private fun SelectRequest.select(): SelectResponse {
+        dynamoRequires(limit == null || limit > 0) {
+            "Limit must be >= 1."
+        }
+        dynamoRequires(consistentRead != false) {
+            "Non-consistent read is not supported in query yet."
+        }
+
+        dynamoRequires(tableName in tablesMetadata) {
+            "Cannot query from non-existent table $tableName."
+        }
+
+        val table = tablesMetadata.getValue(tableName)
+        val index = indexName?.let { table.localSecondaryIndex(it) }
+        val keyConditions = retrieveKeyConditions()?.also { keyConditions ->
+            keyConditions[table.partitionKey].let {
+                dynamoRequires(it != null && it.comparisonOperator() == ComparisonOperator.EQ) {
+                    "Partition key must use '=' operator."
+                }
+            }
+            dynamoRequires(keyConditions.size <= 2) {
+                "Length of key conditions must be 1 or 2."
+            }
+            if (index == null) {
+                dynamoRequires(keyConditions.size == 1 || table.sortKey in keyConditions) {
+                    "Only partition and sort keys can be used in key conditions."
+                }
+            } else {
+                dynamoRequires(keyConditions.size == 1 || index.sortKey in keyConditions) {
+                    "Only partition key and index sort key can be used in key conditions."
+                }
+            }
+        }
+
+        val items = storage.query(tableName, keyConditions).let {
+            if (scanIndexForward) it else it.reversed()
+        }.map { item ->
+            item.associate { it.name to it.type.toAttributeValue() }
+        }.let { items ->
+            exclusiveStartKey?.let { exclusiveStartKey ->
+                val sortKey = exclusiveStartKey[table.sortKey]
+                items.asSequence()
+                    .dropWhile { it[table.sortKey] != sortKey }
+                    .drop(1)
+                    .toList()
+            } ?: items
+        }.let { items ->
+            limit?.let { items.take(it) } ?: items
+        }
+
+        val filterExpression = retrieveFilterExpression()
+        val filteredItems = filterExpression?.let {
+            items.filter {
+                val withoutKeys = it.toMutableMap().apply {
+                    remove(table.partitionKey)
+                    remove(table.sortKey)
+                }
+                filterExpression.evaluate(withoutKeys)
+            }
+        } ?: items
+
+        val responseBuilder = SelectResponse.Builder().apply {
+            count = filteredItems.size
+            scannedCount = items.size
+        }
+
+        if (items.size == limit) {
+            responseBuilder.lastEvaluatedKey = items.last()
+        } else {
+            responseBuilder.lastEvaluatedKey = DefaultSdkAutoConstructMap.getInstance()
+        }
+
+        val transformer = retrieveAttributesTransformer(table)
+        if (select == Select.COUNT) {
+            responseBuilder.items = DefaultSdkAutoConstructList.getInstance()
+        } else {
+            responseBuilder.items = filteredItems.map(transformer)
+        }
+        return responseBuilder.build()
     }
 }

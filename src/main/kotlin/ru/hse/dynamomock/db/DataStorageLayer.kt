@@ -19,7 +19,7 @@ interface DataStorageLayer {
 
     fun updateItem(request: DBPutItemRequest)
 
-    fun query(tableName: String, keyConditions: Map<String, Condition>): List<List<AttributeInfo>>
+    fun query(tableName: String, keyConditions: Map<String, Condition>?): List<List<AttributeInfo>>
 
     // TODO support other queries
 }

@@ -3,7 +3,9 @@ package ru.hse.dynamomock
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import ru.hse.dynamomock.model.TableMetadata
+import ru.hse.dynamomock.model.query.SelectResponse
 import ru.hse.dynamomock.model.query.grammar.*
+import ru.hse.dynamomock.model.query.toSelectResponse
 import ru.hse.dynamomock.model.sortKey
 import ru.hse.dynamomock.model.toAttributeTypeInfo
 import software.amazon.awssdk.services.dynamodb.model.*
@@ -15,7 +17,7 @@ import kotlin.NoSuchElementException
 import kotlin.properties.Delegates
 import kotlin.test.*
 
-internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
+internal class AWSDynamoDBMockSelectTest : AWSDynamoDBMockTest() {
     enum class AttributeType { N, S } // TODO test B
 
     private inner class InsideTest {
@@ -28,35 +30,52 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
         var defaultLsiName: String = "default_index_name"
 
         var query by Delegates.notNull<QueryRequest>()
+        var scan by Delegates.notNull<ScanRequest>()
         var items by Delegates.notNull<List<Map<String, AttributeValue>>>()
         var localSecondaryIndexes = emptyList<Pair<LocalSecondaryIndex, AttributeType>>()
 
         var expected by Delegates.notNull<Expected>()
 
-        fun test() {
-            init()
+        private fun buildMetadata() = TableMetadata(
+            tableName = tableName,
+            attributeDefinitions = listOfNotNull(
+                AttributeDefinition.builder().attributeType(partKeyType.toString()).attributeName(partKey).build(),
+                sortKeyType?.let {
+                    AttributeDefinition.builder().attributeType(it.toString()).attributeName(sortKey).build()
+                }
+            ) + localSecondaryIndexes.map { (index, type) ->
+                AttributeDefinition.builder().attributeType(type.toString()).attributeName(index.sortKey).build()
+            },
+            partitionKey = partKey,
+            sortKey = sortKeyType?.let { sortKey },
+            tableStatus = TableStatus.ACTIVE,
+            localSecondaryIndexes = localSecondaryIndexes.associate { it.first.indexName() to it.first },
+            creationDateTime = Instant.now()
+        )
 
-            val metadata = TableMetadata(
-                tableName = tableName,
-                attributeDefinitions = listOfNotNull(
-                    AttributeDefinition.builder().attributeType(partKeyType.toString()).attributeName(partKey).build(),
-                    sortKeyType?.let {
-                        AttributeDefinition.builder().attributeType(it.toString()).attributeName(sortKey).build()
-                    }
-                ) + localSecondaryIndexes.map { (index, type) ->
-                    AttributeDefinition.builder().attributeType(type.toString()).attributeName(index.sortKey).build()
-                },
-                partitionKey = partKey,
-                sortKey = sortKeyType?.let { sortKey },
-                tableStatus = TableStatus.ACTIVE,
-                localSecondaryIndexes = localSecondaryIndexes.associate { it.first.indexName() to it.first },
-                creationDateTime = Instant.now()
-            )
-
+        private fun prepare() {
+            val metadata = buildMetadata()
             mock.createTable(metadata.toCreateTableRequest())
             items.forEach { mock.putItem(putItemRequestBuilder(tableName, it)) }
+        }
+
+        fun testQuery() {
+            init()
+            prepare()
             mock.query(query).apply {
-                expected.assert(this)
+                assertNotNull(items())
+                assertNotNull(lastEvaluatedKey())
+                expected.assert(toSelectResponse())
+            }
+        }
+
+        fun testScan() {
+            init()
+            prepare()
+            mock.scan(scan).apply {
+                assertNotNull(items())
+                assertNotNull(lastEvaluatedKey())
+                expected.assert(toSelectResponse())
             }
         }
 
@@ -77,7 +96,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     private sealed interface Expected {
-        fun assert(response: QueryResponse)
+        fun assert(response: SelectResponse)
     }
 
     private data class ExpectedItems(
@@ -85,45 +104,48 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
         val scannedCount: Int,
         val ignoreOrder: Boolean = false
     ) : Expected {
-        override fun assert(response: QueryResponse) {
-            assertEquals(items.size, response.count())
-            assertEquals(scannedCount, response.scannedCount())
+        override fun assert(response: SelectResponse) {
+            assertEquals(items.size, response.count)
+            assertEquals(scannedCount, response.scannedCount)
             if (!ignoreOrder) {
-                assertEquals(items, response.items())
+                assertEquals(items, response.items)
             } else {
-                assertEquals(items.toSet(), response.items().toSet())
+                assertEquals(items.toSet(), response.items.toSet())
             }
-            assertNotNull(response.lastEvaluatedKey())
+            assertNotNull(response.lastEvaluatedKey)
         }
     }
 
     private data class ExpectedCount(val count: Int, val scannedCount: Int) : Expected {
-        override fun assert(response: QueryResponse) {
-            assertFalse(response.hasItems())
-            assertFalse(response.hasLastEvaluatedKey())
-            assertNotNull(response.items())
-            assertNotNull(response.lastEvaluatedKey())
-            assertEquals(count, response.count())
-            assertEquals(scannedCount, response.scannedCount())
+        override fun assert(response: SelectResponse) {
+            assertNull(response.items)
+            assertNull(response.lastEvaluatedKey)
+            assertEquals(count, response.count)
+            assertEquals(scannedCount, response.scannedCount)
         }
     }
 
     private object EmptyExpected : Expected {
-        override fun assert(response: QueryResponse) = Unit
+        override fun assert(response: SelectResponse) = Unit
     }
 
-    private inline fun test(autoRun: Boolean = true, block: InsideTest.() -> Unit) {
+    private inline fun testQuery(autoRun: Boolean = true, block: InsideTest.() -> Unit) {
         InsideTest().apply {
             block()
-            if (autoRun) {
-                test()
-            }
+            if (autoRun) testQuery()
         }
     }
 
-    private inline fun <reified T : Exception> failed(block: InsideTest.() -> Unit) {
+    private inline fun testScan(autoRun: Boolean = true, block: InsideTest.() -> Unit) {
+        InsideTest().apply {
+            block()
+            if (autoRun) testScan()
+        }
+    }
+
+    private inline fun <reified T : Exception> queryFailed(block: InsideTest.() -> Unit) {
         assertThrows<T> {
-            test {
+            testQuery {
                 partKeyType = AttributeType.S
                 items = listOf()
                 expected = EmptyExpected
@@ -173,7 +195,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
         Condition.builder().attributeValueList(attributeValueList).comparisonOperator(comparisonOperator).build()
 
     @Test
-    fun `test simple query with partition key`() = test {
+    fun `test simple query with partition key`() = testQuery {
         partKeyType = AttributeType.N
         sortKeyType = AttributeType.S
         items = listOf(
@@ -189,7 +211,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test comparison num sort key`() = test(autoRun = false) {
+    fun `test comparison num sort key`() = testQuery(autoRun = false) {
         partKeyType = AttributeType.S
         sortKeyType = AttributeType.N
         val value = "value"
@@ -215,7 +237,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
                     keyConditionExpression = "$partKey = :pk and $sortKey ${comparison.toSign()} :sk",
                     expressionAttributeValues = mapOf(":pk" to atS(value), ":sk" to atN(point.toString()))
                 )
-                test()
+                testQuery()
 
                 query = query(
                     tableName = tableName,
@@ -224,13 +246,13 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
                         sortKey to condition(listOf(atN(point.toString())), comparison)
                     )
                 )
-                test()
+                testQuery()
             }
         }
     }
 
     @Test
-    fun `test simple comparison str sort key`() = test {
+    fun `test simple comparison str sort key`() = testQuery {
         partKeyType = AttributeType.S
         sortKeyType = AttributeType.S
         items = listOf(
@@ -247,7 +269,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test begins with sort key`() = test {
+    fun `test begins with sort key`() = testQuery {
         partKeyType = AttributeType.S
         sortKeyType = AttributeType.S
         items = listOf(
@@ -265,7 +287,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test between with sort key`() = test {
+    fun `test between with sort key`() = testQuery {
         partKeyType = AttributeType.N
         sortKeyType = AttributeType.S
         items = listOf(
@@ -285,7 +307,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test filter expression comparisons`() = test(autoRun = false) {
+    fun `test filter expression comparisons`() = testQuery(autoRun = false) {
         partKeyType = AttributeType.S
         sortKeyType = AttributeType.N
         items = listOf(
@@ -303,7 +325,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             expressionAttributeValues = values
         )
         expected = ExpectedItems(items = listOf(items[0]), scannedCount = 3)
-        test()
+        testQuery()
 
         query = query(
             tableName = tableName,
@@ -312,7 +334,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             expressionAttributeValues = values
         )
         expected = ExpectedItems(items = items, scannedCount = 3)
-        test()
+        testQuery()
 
         query = query(
             tableName = tableName,
@@ -321,7 +343,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             expressionAttributeValues = values
         )
         expected = ExpectedItems(items = listOf(items[2]), scannedCount = 3)
-        test()
+        testQuery()
 
         query = query(
             tableName = tableName,
@@ -330,11 +352,11 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             expressionAttributeValues = values
         )
         expected = ExpectedItems(items = listOf(items[0]), scannedCount = 3)
-        test()
+        testQuery()
     }
 
     @Test
-    fun `test filter expression begins with`() = test {
+    fun `test filter expression begins with`() = testQuery {
         partKeyType = AttributeType.S
         sortKeyType = AttributeType.S
         items = listOf(
@@ -354,7 +376,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test filter expression in`() = test {
+    fun `test filter expression in`() = testQuery {
         partKeyType = AttributeType.S
         sortKeyType = AttributeType.S
         items = listOf(
@@ -373,7 +395,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test filter expression attributes`() = test(autoRun = false) {
+    fun `test filter expression attributes`() = testQuery(autoRun = false) {
         partKeyType = AttributeType.S
         sortKeyType = AttributeType.S
         items = listOf(
@@ -390,7 +412,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             expressionAttributeValues = values
         )
         expected = ExpectedItems(items = listOf(items[0], items[1]), scannedCount = 3)
-        test()
+        testQuery()
 
         query = query(
             tableName = tableName,
@@ -399,7 +421,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             expressionAttributeValues = values
         )
         expected = ExpectedItems(items = listOf(items[2]), scannedCount = 3)
-        test()
+        testQuery()
 
         query = query(
             tableName = tableName,
@@ -408,11 +430,11 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             expressionAttributeValues = values
         )
         expected = ExpectedItems(items = listOf(items[0], items[2]), scannedCount = 3)
-        test()
+        testQuery()
     }
 
     @Test
-    fun `test filter expression contains in string and size`() = test(autoRun = false) {
+    fun `test filter expression contains in string and size`() = testQuery(autoRun = false) {
         partKeyType = AttributeType.S
         sortKeyType = AttributeType.N
         items = listOf(
@@ -429,7 +451,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             expressionAttributeValues = mapOf(":v" to atS("hello"), ":a" to atS("friend"))
         )
         expected = ExpectedItems(items = listOf(items[0], items[1]), scannedCount = 4)
-        test()
+        testQuery()
 
         query = query(
             tableName = tableName,
@@ -438,11 +460,11 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             expressionAttributeValues = mapOf(":v" to atS("hello"), ":len" to atN("15"))
         )
         expected = ExpectedItems(items = listOf(items[0]), scannedCount = 4)
-        test()
+        testQuery()
     }
 
     @Test
-    fun `test filter expression contains in string set and size`() = test(autoRun = false) {
+    fun `test filter expression contains in string set and size`() = testQuery(autoRun = false) {
         partKeyType = AttributeType.S
         sortKeyType = AttributeType.N
         items = listOf(
@@ -464,7 +486,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             expressionAttributeValues = mapOf(":v" to atS("hello"))
         )
         expected = ExpectedItems(items = listOf(items[0], items[1]), scannedCount = 4)
-        test()
+        testQuery()
 
         query = query(
             tableName = tableName,
@@ -473,11 +495,11 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             expressionAttributeValues = mapOf(":v" to atS("hello"), ":len" to atN("4"))
         )
         expected = ExpectedItems(items = listOf(items[0], items[2]), scannedCount = 4)
-        test()
+        testQuery()
     }
 
     @Test
-    fun `test filter expression contains in num set`() = test {
+    fun `test filter expression contains in num set`() = testQuery {
         partKeyType = AttributeType.S
         sortKeyType = AttributeType.N
         items = listOf(
@@ -498,7 +520,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test filter expression size of lists and maps`() = test {
+    fun `test filter expression size of lists and maps`() = testQuery {
         partKeyType = AttributeType.S
         sortKeyType = AttributeType.S
         items = listOf(
@@ -519,7 +541,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test simple query filter`() = test(autoRun = false) {
+    fun `test simple query filter`() = testQuery(autoRun = false) {
         partKeyType = AttributeType.N
         sortKeyType = AttributeType.N
         items = listOf(
@@ -544,7 +566,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             queryFilter = mapOf("one" to condition(listOf(), NOT_NULL))
         )
         expected = ExpectedItems(items = listOf(items[0]), scannedCount = 2)
-        test()
+        testQuery()
 
         query = query(
             tableName = tableName,
@@ -553,7 +575,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             conditionalOperator = ConditionalOperator.OR
         )
         expected = ExpectedItems(items = listOf(items[0], items[1]), scannedCount = 2)
-        test()
+        testQuery()
 
         query = query(
             tableName = tableName,
@@ -561,7 +583,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             queryFilter = mapOf("one" to condition(listOf(), NOT_NULL), "one1" to condition(listOf(), NOT_NULL))
         )
         expected = ExpectedItems(items = listOf(), scannedCount = 2)
-        test()
+        testQuery()
 
         query = query(
             tableName = tableName,
@@ -569,7 +591,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             queryFilter = mapOf("list" to condition(listOf(atS("two")), CONTAINS))
         )
         expected = ExpectedItems(items = listOf(items[0], items[1]), scannedCount = 2)
-        test()
+        testQuery()
 
         query = query(
             tableName = tableName,
@@ -577,11 +599,11 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             queryFilter = mapOf("val" to condition(listOf(atN("50")), LT))
         )
         expected = ExpectedItems(items = listOf(items[1]), scannedCount = 2)
-        test()
+        testQuery()
     }
 
     @Test
-    fun `test filter expression complex`() = test {
+    fun `test filter expression complex`() = testQuery {
         partKeyType = AttributeType.S
         sortKeyType = AttributeType.N
         items = listOf(
@@ -612,7 +634,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test filter expression nested attributes`() = test(autoRun = false) {
+    fun `test filter expression nested attributes`() = testQuery(autoRun = false) {
         partKeyType = AttributeType.N
         items = listOf(mapOf(
             partKey to atN("1"),
@@ -637,7 +659,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
                 expressionAttributeValues = values
             )
             expected = ExpectedItems(items = expectedItems, scannedCount = 1)
-            test()
+            testQuery()
         }
         fun testSuccess(filterExpression: String) = test(filterExpression, items)
         fun testFail(filterExpression: String) = test(filterExpression, listOf())
@@ -656,7 +678,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test scan index forward`() = test(autoRun = false) {
+    fun `test scan index forward`() = testQuery(autoRun = false) {
         partKeyType = AttributeType.S
         sortKeyType = AttributeType.N
         items = listOf(
@@ -671,7 +693,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             expressionAttributeValues = mapOf(":q" to atS("q"))
         )
         expected = ExpectedItems(items = listOf(items[1], items[0], items[2]), scannedCount = 3)
-        test()
+        testQuery()
 
         query = query(
             tableName = tableName,
@@ -680,11 +702,11 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             scanIndexForward = false
         )
         expected = ExpectedItems(items = listOf(items[2], items[0], items[1]), scannedCount = 3)
-        test()
+        testQuery()
     }
 
     @Test
-    fun `test attributes to get`() = test(autoRun = false) {
+    fun `test attributes to get`() = testQuery(autoRun = false) {
         partKeyType = AttributeType.N
         sortKeyType = AttributeType.S
         items = listOf(
@@ -718,7 +740,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             mapOf("b" to atNS("10", "1", "2")),
             mapOf()
         ))
-        test()
+        testQuery()
 
         query = query(
             tableName = tableName,
@@ -732,11 +754,11 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             mapOf(),
             mapOf()
         ))
-        test()
+        testQuery()
     }
 
     @Test
-    fun `test projection expression`() = test(autoRun = false) {
+    fun `test projection expression`() = testQuery(autoRun = false) {
         partKeyType = AttributeType.N
         sortKeyType = AttributeType.S
         items = listOf(
@@ -760,7 +782,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             mapOf("b" to atNS("10", "1", "2")),
             mapOf()
         ))
-        test()
+        testQuery()
 
         query = query(
             tableName = tableName,
@@ -775,11 +797,11 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             mapOf("b" to atNS("10", "1", "2")),
             mapOf()
         ))
-        test()
+        testQuery()
     }
 
     @Test
-    fun `test projection expression nested attributes`() = test(autoRun = false) {
+    fun `test projection expression nested attributes`() = testQuery(autoRun = false) {
         partKeyType = AttributeType.N
         sortKeyType = AttributeType.S
         items = listOf(
@@ -805,7 +827,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             projectionExpression = "a.f, a.s,b[0].f, b[1],    $partKey, $sortKey"
         )
         expected = ExpectedItems(items = items, scannedCount = 2)
-        test()
+        testQuery()
 
         query = query(
             tableName = tableName,
@@ -817,11 +839,11 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             mapOf(),
             mapOf("a" to items[1].getValue("a"))
         ))
-        test()
+        testQuery()
     }
 
     @Test
-    fun `test select`() = test(autoRun = false) {
+    fun `test select`() = testQuery(autoRun = false) {
         partKeyType = AttributeType.S
         sortKeyType = AttributeType.S
         items = listOf(
@@ -838,7 +860,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             select = Select.ALL_ATTRIBUTES
         )
         expected = ExpectedItems(items = items, scannedCount = 2)
-        test()
+        testQuery()
 
         query = query(
             tableName = tableName,
@@ -902,7 +924,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test local secondary indexes with sort key`() = test(autoRun = false) {
+    fun `test local secondary indexes with sort key`() = testQuery(autoRun = false) {
         partKeyType = AttributeType.S
         sortKeyType = AttributeType.N
         val index = "ind"
@@ -929,13 +951,13 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             scannedCount = 2,
             ignoreOrder = true
         )
-        test()
+        testQuery()
 
         localSecondaryIndexes = listOf(
             localSecondaryIndex(index, ProjectionType.ALL, emptyList()) to AttributeType.S
         )
         expected = ExpectedItems(items = listOf(items[0], items[2]), scannedCount = 2, ignoreOrder = true)
-        test()
+        testQuery()
 
         localSecondaryIndexes = listOf(
             localSecondaryIndex(index, ProjectionType.INCLUDE, listOf("a")) to AttributeType.S
@@ -947,18 +969,18 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             scannedCount = 2,
             ignoreOrder = true
         )
-        test()
+        testQuery()
 
         localSecondaryIndexes = listOf(
             localSecondaryIndex(index, ProjectionType.KEYS_ONLY, emptyList()) to AttributeType.S
         )
         query = query.toBuilder().select(Select.ALL_ATTRIBUTES).build()
         expected = ExpectedItems(items = listOf(items[0], items[2]), scannedCount = 2, ignoreOrder = true)
-        test()
+        testQuery()
     }
 
     @Test
-    fun `test local secondary indexes without sort key`() = failed<DynamoDbException> {
+    fun `test local secondary indexes without sort key`() = queryFailed<DynamoDbException> {
         partKeyType = AttributeType.S
         val index = "myLovelyIndex"
         localSecondaryIndexes = listOf(
@@ -974,7 +996,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test fail non existent table`() = failed<DynamoDbException> {
+    fun `test fail non existent table`() = queryFailed<DynamoDbException> {
         query = query(
             tableName = "non-existent",
             keyConditionExpression = "$partKey = :v",
@@ -984,7 +1006,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
 
     @Test
     fun `test fail select and attributes to get`() {
-        failed<DynamoDbException> {
+        queryFailed<DynamoDbException> {
             query = query(
                 tableName = tableName,
                 keyConditions = mapOf(partKey to condition(listOf(atS("a")), EQ)),
@@ -992,7 +1014,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
                 select = Select.ALL_ATTRIBUTES
             )
         }
-        failed<DynamoDbException> {
+        queryFailed<DynamoDbException> {
             query = query(
                 tableName = tableName,
                 keyConditions = mapOf(partKey to condition(listOf(atS("a")), EQ)),
@@ -1004,7 +1026,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
 
     @Test
     fun `test fail select and projection expression`() {
-        failed<DynamoDbException> {
+        queryFailed<DynamoDbException> {
             query = query(
                 tableName = tableName,
                 keyConditionExpression = "$partKey = :v",
@@ -1013,7 +1035,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
                 select = Select.ALL_ATTRIBUTES
             )
         }
-        failed<DynamoDbException> {
+        queryFailed<DynamoDbException> {
             query = query(
                 tableName = tableName,
                 keyConditionExpression = "$partKey = :v",
@@ -1026,7 +1048,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
 
     @Test
     fun `test fail same in attributes to get`() {
-        failed<DynamoDbException> {
+        queryFailed<DynamoDbException> {
             query = query(
                 tableName = tableName,
                 keyConditions = mapOf(partKey to condition(listOf(atS("a")), EQ)),
@@ -1036,7 +1058,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test fail attributes to get and projection expression at the same time`() = failed<DynamoDbException> {
+    fun `test fail attributes to get and projection expression at the same time`() = queryFailed<DynamoDbException> {
         query = query(
             tableName = tableName,
             keyConditions = mapOf(partKey to condition(listOf(atS("a")), EQ)),
@@ -1047,14 +1069,14 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
 
     @Test
     fun `test fail key conditions no partition key`() {
-        failed<DynamoDbException> {
+        queryFailed<DynamoDbException> {
             sortKeyType = AttributeType.S
             query = query(
                 tableName = tableName,
                 keyConditions = mapOf(sortKey to condition(listOf(atS("a")), EQ))
             )
         }
-        failed<DynamoDbException> {
+        queryFailed<DynamoDbException> {
             sortKeyType = AttributeType.S
             query = query(
                 tableName = tableName,
@@ -1065,7 +1087,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test fail key conditions extra attribute`() = failed<DynamoDbException> {
+    fun `test fail key conditions extra attribute`() = queryFailed<DynamoDbException> {
         query = query(
             tableName = tableName,
             keyConditions = mapOf(partKey to condition(listOf(atS("a")), EQ), "a" to condition(listOf(atS("a")), EQ))
@@ -1073,7 +1095,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test fail key conditions invalid number of arguments`() = failed<DynamoDbException> {
+    fun `test fail key conditions invalid number of arguments`() = queryFailed<DynamoDbException> {
         query = query(
             tableName = tableName,
             keyConditions = mapOf(partKey to condition(listOf(atS("a"), atS("b")), EQ))
@@ -1082,13 +1104,13 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
 
     @Test
     fun `test fail key conditions not eq on partition key`() {
-        failed<DynamoDbException> {
+        queryFailed<DynamoDbException> {
             query = query(
                 tableName = tableName,
                 keyConditions = mapOf(partKey to condition(listOf(atS("a")), LE))
             )
         }
-        failed<DynamoDbException> {
+        queryFailed<DynamoDbException> {
             query = query(
                 tableName = tableName,
                 keyConditionExpression = "$partKey <= :v",
@@ -1099,7 +1121,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
 
     @Test
     fun `test fail key conditions invalid operation on sort key`() {
-        failed<DynamoDbException> {
+        queryFailed<DynamoDbException> {
             sortKeyType = AttributeType.N
             query = query(
                 tableName = tableName,
@@ -1109,7 +1131,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
                 )
             )
         }
-        failed<DynamoDbException> {
+        queryFailed<DynamoDbException> {
             sortKeyType = AttributeType.N
             query = query(
                 tableName = tableName,
@@ -1120,7 +1142,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test fail key condition expression not and`() = failed<DynamoDbException> {
+    fun `test fail key condition expression not and`() = queryFailed<DynamoDbException> {
         sortKeyType = AttributeType.S
         query = query(
             tableName = tableName,
@@ -1130,7 +1152,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test fail key condition expression uses non-existent value`() = failed<NoSuchElementException> { // TODO
+    fun `test fail key condition expression uses non-existent value`() = queryFailed<NoSuchElementException> { // TODO
         query = query(
             tableName = tableName,
             keyConditionExpression = "$partKey = :v"
@@ -1138,7 +1160,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test fail filter expression uses non-existent value`() = failed<NoSuchElementException> { // TODO
+    fun `test fail filter expression uses non-existent value`() = queryFailed<NoSuchElementException> { // TODO
         query = query(
             tableName = tableName,
             keyConditionExpression = "$partKey = :v",
@@ -1149,7 +1171,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
 
     @Test
     fun `test fail invalid limit`() {
-        failed<DynamoDbException> {
+        queryFailed<DynamoDbException> {
             query = query(
                 tableName = tableName,
                 keyConditionExpression = "$partKey = :v",
@@ -1157,7 +1179,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
                 limit = 0
             )
         }
-        failed<DynamoDbException> {
+        queryFailed<DynamoDbException> {
             query = query(
                 tableName = tableName,
                 keyConditionExpression = "$partKey = :v",
@@ -1168,7 +1190,7 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
     }
 
     @Test
-    fun `test invalid name of local secondary index`() = failed<DynamoDbException> {
+    fun `test invalid name of local secondary index`() = queryFailed<DynamoDbException> {
         localSecondaryIndexes = listOf(
             localSecondaryIndex("hi", ProjectionType.KEYS_ONLY, emptyList(), "wow") to AttributeType.S
         )
@@ -1177,6 +1199,35 @@ internal class AWSDynamoDBMockQueryTest : AWSDynamoDBMockTest() {
             indexName = "other",
             keyConditionExpression = "$partKey = :val",
             expressionAttributeValues = mapOf(":val" to atS("kek"))
+        )
+    }
+
+    /*****************************************************************************************************************/
+    /**
+     * `Query` and `Scan` share most of the code. So we don't have to test all these things for the scan operation.
+     * There is only a simple test for `Scan`.
+     */
+
+    @Test
+    fun `test simple scan`() = testScan {
+        partKeyType = AttributeType.S
+        sortKeyType = AttributeType.S
+        items = listOf(
+            mapOf(partKey to atS("one"), sortKey to atS("123 hellos"), "a" to atN("kek")),
+            mapOf(partKey to atS("one"), sortKey to atS("456"), "b" to atN("test"), "a" to atSS("one", "two")),
+            mapOf(partKey to atS("two"), sortKey to atS("amazing")),
+            mapOf(partKey to atS("Garfild"), sortKey to atS("spider")),
+            mapOf(partKey to atS("Holland"), sortKey to atS("man"))
+        )
+        scan = ScanRequest.builder()
+            .tableName(tableName)
+            .projectionExpression("$partKey, $sortKey, a")
+            .limit(100)
+            .build()
+        expected = ExpectedItems(
+            items = items.map { item -> item.filterKeys { it != "b" } },
+            scannedCount = 5,
+            ignoreOrder = true
         )
     }
 }

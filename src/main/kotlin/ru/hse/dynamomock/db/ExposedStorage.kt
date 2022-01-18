@@ -41,20 +41,23 @@ class ExposedStorage : DataStorageLayer {
         tables.remove(hashTableName(tableName))
     }
 
-    override fun query(tableName: String, keyConditions: Map<String, Condition>): List<List<AttributeInfo>> {
+    override fun query(tableName: String, keyConditions: Map<String, Condition>?): List<List<AttributeInfo>> {
         val table = getTable(tableName)
-        val keys = keyConditions.map { (name, cond) ->
-            val strs = table.namesToStringColumns.filter { it.first == name }.map { it.second }
-            val nums = table.namesToNumColumns.filter { it.first == name }.map { it.second }
+        val condition: SqlExpressionBuilder.() -> Op<Boolean> =
+            if (keyConditions != null) {
+                val keys = keyConditions.map { (name, cond) ->
+                    val strs = table.namesToStringColumns.filter { it.first == name }.map { it.second }
+                    val nums = table.namesToNumColumns.filter { it.first == name }.map { it.second }
 
-            strs.firstNotNullOfOrNull { cond.toOp(it) }
-                ?: nums.firstNotNullOfOrNull { cond.toOp(it) }
-                ?: throw dynamoException("Invalid key condition with ${name}.")
-        }
+                    strs.firstNotNullOfOrNull { cond.toOp(it) }
+                        ?: nums.firstNotNullOfOrNull { cond.toOp(it) }
+                        ?: throw dynamoException("Invalid key condition with ${name}.")
+                }
 
-        val condition: SqlExpressionBuilder.() -> Op<Boolean> = {
-            keys.map { it() }.reduce { a, b -> a and b }
-        }
+                ({ keys.map { it() }.reduce { a, b -> a and b } })
+            } else {
+                { Op.TRUE }
+            }
 
         return transaction {
             table.select(condition)
