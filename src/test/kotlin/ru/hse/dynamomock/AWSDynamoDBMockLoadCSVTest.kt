@@ -22,6 +22,15 @@ internal class AWSDynamoDBMockLoadCSVTest : AWSDynamoDBMockTest() {
     }
 
     @Test
+    fun `inputStream test`() {
+        val inputStream = AWSDynamoDBMockLoadCSVTest::class.java.getResourceAsStream("/load-items/empty.csv")
+        checkNotNull(inputStream)
+        assertThat {
+            mock.loadCSV(inputStream, "whatever")
+        }.isFailure().hasMessage("The file is empty")
+    }
+
+    @Test
     fun `wrong value format`() {
         assertThat {
             mock.loadCSV(filesLocation + "wrong-1-value-format.csv", "whatever")

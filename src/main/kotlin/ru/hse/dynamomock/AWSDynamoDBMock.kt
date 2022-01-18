@@ -8,6 +8,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.*
 import java.util.concurrent.CompletableFuture
+import java.io.InputStream
 
 class AWSDynamoDBMock : DynamoDbClient {
     private val service by lazy { AWSDynamoDBMockService(ExposedStorage()) }
@@ -59,6 +60,10 @@ class AWSDynamoDBMock : DynamoDbClient {
 
     fun loadCSV(fileName: String, tableName: String) {
         service.loadCSV(fileName, tableName)
+    }
+
+    fun loadCSV(inputStream: InputStream, tableName: String) {
+        service.loadCSV(inputStream, tableName)
     }
 
     companion object {
@@ -122,4 +127,6 @@ class AWSDynamoDBAsyncMock : DynamoDbAsyncClient {
     }
 
     fun loadCSV(filename: String, tableName: String) = mock.loadCSV(filename, tableName)
+
+    fun loadCSV(inputStream: InputStream, tableName: String) = mock.loadCSV(inputStream, tableName)
 }

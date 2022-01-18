@@ -11,6 +11,8 @@ import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList
 import software.amazon.awssdk.core.util.DefaultSdkAutoConstructMap
 import software.amazon.awssdk.services.dynamodb.model.*
 import java.util.*
+import java.io.File
+import java.io.InputStream
 
 class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     private val tablesMetadata = mutableMapOf<String, TableMetadata>()
@@ -197,18 +199,22 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             .build()
     }
 
-    fun loadCSV(fileName: String, tableName: String) {
-        val allowedTypes = ImportableType.values().map { e -> e.name }
-        val header = mutableListOf<Pair<String, String>>()
-        val rows = mutableListOf<List<String>>()
-        csvReader {
+    fun loadCSV(filePath: String, tableName: String) {
+        loadCSV(File(filePath).inputStream(), tableName)
+    }
+
+    fun loadCSV(inputStream: InputStream, tableName: String) {
+        val rows = csvReader {
             delimiter = ';'
             quoteChar = '"'
-        }.open(fileName) {
-            readAllAsSequence().forEach { row ->
-                rows.add(row)
-            }
-        }
+        }.readAll(inputStream).toMutableList()
+        processCSV(rows, tableName)
+    }
+
+    private fun processCSV(rows: MutableList<List<String>>, tableName: String) {
+        val allowedTypes = ImportableType.values().map { e -> e.name }
+        val header = mutableListOf<Pair<String, String>>()
+
         val firstRow = rows.removeFirstOrNull() ?: throw AWSMockCSVException("The file is empty")
         firstRow.forEach {
             val value = it.split("|").map { v -> v.trim() }
