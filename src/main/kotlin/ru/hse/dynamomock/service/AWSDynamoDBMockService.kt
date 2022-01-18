@@ -9,12 +9,10 @@ import ru.hse.dynamomock.model.*
 import ru.hse.dynamomock.model.query.*
 import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList
 import software.amazon.awssdk.core.util.DefaultSdkAutoConstructMap
-<<<<<<< HEAD
 import software.amazon.awssdk.services.dynamodb.model.*
 import java.util.*
-=======
+import java.io.File
 import java.io.InputStream
->>>>>>> d2b5477 (change to inputstream)
 
 class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     private val tablesMetadata = mutableMapOf<String, TableMetadata>()
@@ -202,16 +200,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
     }
 
     fun loadCSV(filePath: String, tableName: String) {
-        val rows = mutableListOf<List<String>>()
-        csvReader {
-            delimiter = ';'
-            quoteChar = '"'
-        }.open(filePath) {
-                readAllAsSequence().forEach { row ->
-                    rows.add(row)
-                }
-            }
-        processCSV(rows, tableName)
+        loadCSV(File(filePath).inputStream(), tableName)
     }
 
     fun loadCSV(inputStream: InputStream, tableName: String) {
