@@ -5,6 +5,8 @@ import ru.hse.dynamomock.model.*
 import software.amazon.awssdk.services.dynamodb.model.Condition
 
 interface DataStorageLayer {
+    fun close()
+
     fun createTable(tableMetadata: TableMetadata)
 
     fun deleteTable(tableName: String)
