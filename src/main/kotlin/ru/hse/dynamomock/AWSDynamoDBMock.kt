@@ -102,6 +102,12 @@ class AWSDynamoDBAsyncMock : DynamoDbAsyncClient {
         mock.query(queryRequest)
     }
 
+    override fun scan(
+        scanRequest: ScanRequest
+    ): CompletableFuture<ScanResponse> = CompletableFuture.supplyAsync {
+        mock.scan(scanRequest)
+    }
+
     override fun putItem(
         putItemRequest: PutItemRequest
     ): CompletableFuture<PutItemResponse> = CompletableFuture.supplyAsync {
