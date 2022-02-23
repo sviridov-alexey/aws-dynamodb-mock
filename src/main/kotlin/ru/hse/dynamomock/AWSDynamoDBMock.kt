@@ -54,6 +54,10 @@ class AWSDynamoDBMock : DynamoDbClient {
         return service.deleteItem(deleteItemRequest)
     }
 
+    override fun updateItem(updateItemRequest: UpdateItemRequest): UpdateItemResponse {
+        return service.updateItem(updateItemRequest)
+    }
+
     override fun batchWriteItem(batchWriteItemRequest: BatchWriteItemRequest): BatchWriteItemResponse {
         return service.batchWriteItem(batchWriteItemRequest)
     }
@@ -118,6 +122,12 @@ class AWSDynamoDBAsyncMock : DynamoDbAsyncClient {
         deleteItemRequest: DeleteItemRequest
     ): CompletableFuture<DeleteItemResponse> = CompletableFuture.supplyAsync {
         mock.deleteItem(deleteItemRequest)
+    }
+
+    override fun updateItem(
+        updateItemRequest: UpdateItemRequest
+    ): CompletableFuture<UpdateItemResponse> = CompletableFuture.supplyAsync {
+        mock.updateItem(updateItemRequest)
     }
 
     override fun batchWriteItem(

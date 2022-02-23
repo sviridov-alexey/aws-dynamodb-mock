@@ -121,6 +121,245 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
             .build()
     }
 
+    private fun buildItem(
+        keys: Map<String, AttributeValue>,
+        columnName: String,
+        attributeValue: AttributeValue
+    ): Map<String, AttributeValue> = mapOf(columnName to attributeValue) + keys
+
+
+    private fun checkAttributeValue(av: AttributeValue): DynamoType = when {
+            av.n() != null -> DynamoType.N
+            av.s() != null -> DynamoType.S
+            av.b() != null -> DynamoType.B
+            av.hasSs() -> DynamoType.SS
+            av.hasNs() -> DynamoType.NS
+            av.hasBs() -> DynamoType.BS
+            av.hasL() -> DynamoType.L
+            av.hasM() -> DynamoType.M
+            else -> throw dynamoException("Supplied AttributeValue is empty, must contain exactly one of the supported datatypes")
+        }
+
+    private fun checkAttributesForDelete(first: AttributeValue, second: AttributeValue): DynamoType {
+        val firstType = checkAttributeValue(first)
+        val secondType = checkAttributeValue(second)
+        if (secondType !in listOf(DynamoType.NS, DynamoType.SS, DynamoType.BS)) {
+            val errorString =
+                "One or more parameter values were invalid: DELETE action with value is not supported for the type " +
+                    when (secondType) {
+                        DynamoType.N -> "NUMBER"
+                        DynamoType.S -> "STRING"
+                        DynamoType.B -> "BINARY"
+                        DynamoType.BOOL -> "BOOLEAN"
+                        DynamoType.NULL -> "NULL"
+                        DynamoType.L -> "LIST"
+                        DynamoType.M -> "MAP"
+                        else -> ""
+                    }
+            throw dynamoException(errorString)
+        }
+        if (firstType != secondType) {
+            throw dynamoException("Type mismatch for attribute to update")
+        }
+        return secondType
+    }
+
+    private fun putInUpdate(
+        tableName: String, partitionKey: Key, sortKey: Key?,
+    columnName: String, av: AttributeValueUpdate, keys: Map<String, AttributeValue>) {
+        val previousItem = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))?.associate {
+            it.name to it.type.toAttributeValue()
+        }
+        if (previousItem != null) {
+            // gel all columns
+            val itemsList = previousItem.map { (k, v) ->
+                AttributeInfo(k, v.toAttributeTypeInfo())
+            }.toMutableList()
+            val newAttributeTypeInfo = av.value().toAttributeTypeInfo()
+
+            // check if columnName is there
+            val previousAttributeValue = previousItem[columnName]
+            if (previousAttributeValue != null) {
+                val oldAttributeTypeInfo = previousAttributeValue.toAttributeTypeInfo()
+                itemsList.remove(AttributeInfo(columnName, oldAttributeTypeInfo))
+            }
+            itemsList.add(AttributeInfo(columnName, newAttributeTypeInfo))
+            storage.updateItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
+        } else {
+            val itemsList = buildItem(keys, columnName, av.value()).map { (k, v) ->
+                AttributeInfo(
+                    k,
+                    v.toAttributeTypeInfo()
+                )
+            }
+            storage.putItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
+        }
+    }
+
+    private fun deleteInUpdate(
+        tableName: String, partitionKey: Key, sortKey: Key?,
+        columnName: String, av: AttributeValueUpdate, keys: Map<String, AttributeValue>
+    ) {
+        if (av.value() == null) {
+            deleteItem(DeleteItemRequest.builder()
+                .key(keys)
+                .tableName(tableName)
+                .build())
+        } else {
+            val previousItem = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))?.associate {
+                it.name to it.type.toAttributeValue()
+            }
+            if (previousItem != null) {
+                val previousItemAttribute = previousItem[columnName]
+                if (previousItemAttribute != null) {
+                    val setType = checkAttributesForDelete(previousItemAttribute, av.value())
+                    val newItem = previousItem.toMutableMap()
+                    val diffSet = when (setType) {
+                        DynamoType.SS -> {
+                            val diffSet = previousItemAttribute.ss() - av.value().ss()
+                            newItem[columnName] = AttributeValue.builder()
+                                .ss(diffSet)
+                                .build()
+                            diffSet
+                        }
+                        DynamoType.NS -> {
+                            val diffSet = previousItemAttribute.ns() - av.value().ns()
+                            newItem[columnName] = AttributeValue.builder()
+                                .ns(diffSet)
+                                .build()
+                            diffSet
+                        }
+                        else -> {
+                            val diffSet = previousItemAttribute.bs() - av.value().bs()
+                            newItem[columnName] = AttributeValue.builder()
+                                .bs(diffSet)
+                                .build()
+                            diffSet
+                        }
+                    }
+
+                    if (diffSet.isEmpty()) {
+                        deleteItem(DeleteItemRequest.builder()
+                            .key(keys)
+                            .tableName(tableName)
+                            .build())
+                    } else {
+                        val itemsList = newItem.map { (k, v) -> AttributeInfo(k, v.toAttributeTypeInfo()) }
+                        storage.updateItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
+                    }
+
+                }
+            }
+        }
+    }
+
+    private fun checkAttributesForAdd(first: AttributeValue, second: AttributeValue): DynamoType {
+        val firstType = checkAttributeValue(first)
+        val secondType = checkAttributeValue(second)
+        if (secondType !in listOf(DynamoType.N, DynamoType.NS, DynamoType.SS, DynamoType.BS)) {
+            val errorString =
+                "One or more parameter values were invalid: ADD action with value is not supported for the type " +
+                    when (secondType) {
+                        DynamoType.S -> "STRING"
+                        DynamoType.B -> "BINARY"
+                        DynamoType.BOOL -> "BOOLEAN"
+                        DynamoType.NULL -> "NULL"
+                        DynamoType.L -> "LIST"
+                        DynamoType.M -> "MAP"
+                        else -> ""
+                    }
+            throw dynamoException(errorString)
+        }
+        if (firstType != secondType) {
+            throw dynamoException("Type mismatch for attribute to update")
+        }
+        return secondType
+    }
+
+    private fun addInUpdate(
+        tableName: String, partitionKey: Key, sortKey: Key?,
+        columnName: String, av: AttributeValueUpdate, keys: Map<String, AttributeValue>
+    ) {
+        val previousItem = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))?.associate {
+            it.name to it.type.toAttributeValue()
+        }
+        if (previousItem == null) {
+            // todo: ADD - Causes DynamoDB to create an item with the supplied primary key and number (or set of numbers)
+            // for the attribute value. The only data types allowed are Number and Number Set.
+            val itemsList = buildItem(keys, columnName, av.value()).map { (k, v) ->
+                AttributeInfo(
+                    k,
+                    v.toAttributeTypeInfo()
+                )
+            }
+            storage.putItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
+        } else {
+            val previousItemAttribute = previousItem[columnName]
+            if (previousItemAttribute != null) {
+                val attrType = checkAttributesForAdd(previousItemAttribute, av.value())
+                val newItem = previousItem.toMutableMap()
+                when (attrType) {
+                    DynamoType.SS -> {
+                        val newSet = previousItemAttribute.ss() + av.value().ss()
+                        newItem[columnName] = AttributeValue.builder()
+                            .ss(newSet)
+                            .build()
+                    }
+                    DynamoType.NS -> {
+                        val newSet = previousItemAttribute.ns() - av.value().ns()
+                        newItem[columnName] = AttributeValue.builder()
+                            .ns(newSet)
+                            .build()
+                    }
+                    DynamoType.BS -> {
+                        val newSet = previousItemAttribute.bs() + av.value().bs()
+                        newItem[columnName] = AttributeValue.builder()
+                            .bs(newSet)
+                            .build()
+                    }
+                    else -> {
+                        // number
+                        val newNum = previousItemAttribute.n().toBigDecimal() + av.value().n().toBigDecimal()
+                        newItem[columnName] = AttributeValue.builder()
+                            .n(newNum.toString())
+                            .build()
+                    }
+                }
+                val itemsList = newItem.map { (k, v) -> AttributeInfo(k, v.toAttributeTypeInfo()) }
+                storage.updateItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
+            } else {
+                checkAttributesForAdd(av.value(), av.value())
+                val newItem = previousItem.toMutableMap()
+                newItem[columnName] = av.value()
+                val itemsList = newItem.map { (k, v) -> AttributeInfo(k, v.toAttributeTypeInfo()) }
+                storage.updateItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
+            }
+        }
+    }
+
+    fun updateItem(request: UpdateItemRequest): UpdateItemResponse {
+        // todo: if attribute is key in index then check type
+        val tableName = request.tableName()
+        val key = request.key()
+        checkNumOfKeys(tableName, key)
+        val (partitionKey, sortKey) = getRequestMetadata(tableName, key)
+
+        val attributeValues = request.attributeUpdates()
+        attributeValues.forEach { (columnName, av) ->
+            if (av.action() == AttributeAction.PUT) {
+                putInUpdate(tableName, partitionKey, sortKey, columnName, av, key)
+            } else if (av.action() == AttributeAction.DELETE) {
+                deleteInUpdate(tableName, partitionKey, sortKey, columnName, av, key)
+            } else if (av.action() == AttributeAction.ADD) {
+                addInUpdate(tableName, partitionKey, sortKey, columnName, av, key)
+            }
+
+        }
+
+        return UpdateItemResponse.builder()
+            .build()
+    }
+
     fun batchWriteItem(batchWriteItemRequest: BatchWriteItemRequest): BatchWriteItemResponse {
         dynamoRequires(batchWriteItemRequest.hasRequestItems() && batchWriteItemRequest.requestItems().isNotEmpty()) {
             "BatchWriteItem cannot have a null or no requests set"
