@@ -1,6 +1,5 @@
 package ru.hse.dynamomock
 
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import ru.hse.dynamomock.model.TableMetadata
 import software.amazon.awssdk.services.dynamodb.model.*
@@ -67,6 +66,47 @@ internal open class AWSDynamoDBMockTest {
         .key(keys)
         .returnValues(returnValue)
         .build()
+
+    protected fun updateItemRequestBuilder(
+        tableName: String,
+        keys: Map<String, AttributeValue>,
+        attributeUpdates: Map<String, AttributeValueUpdate>,
+        returnValue: ReturnValue = ReturnValue.NONE
+    ): UpdateItemRequest = UpdateItemRequest.builder()
+        .tableName(tableName)
+        .key(keys)
+        .attributeUpdates(attributeUpdates)
+        .returnValues(returnValue)
+        .build()
+
+    protected fun attributeValueUpdateBuilder(
+        action: AttributeAction,
+        value: AttributeValue? = null
+    ): AttributeValueUpdate = AttributeValueUpdate.builder()
+        .action(action)
+        .value(value)
+        .build()
+
+    protected fun keysFromItem(
+        item: Map<String, AttributeValue>,
+        partKeyName: String,
+        sortKeyName: String? = null
+    ) =
+        item.entries.filter { i -> i.key == AWSDynamoDBMockDMLTest.partitionKeyName || i.key == AWSDynamoDBMockDMLTest.sortKeyName }
+            .associate { it.key to it.value }
+
+    protected fun stringAV(
+        s: String
+    ): AttributeValue = AttributeValue.builder()
+        .s(s)
+        .build()
+
+    protected fun numAV(
+        n: String
+    ): AttributeValue = AttributeValue.builder()
+        .n(n)
+        .build()
+
 
     companion object {
         @JvmStatic

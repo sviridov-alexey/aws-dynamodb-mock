@@ -166,7 +166,8 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
     private fun putInUpdate(
         tableName: String, partitionKey: Key, sortKey: Key?,
-    columnName: String, av: AttributeValueUpdate, keys: Map<String, AttributeValue>) {
+        columnName: String, av: AttributeValueUpdate, keys: Map<String, AttributeValue>
+    ) {
         val previousItem = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))?.associate {
             it.name to it.type.toAttributeValue()
         }
@@ -200,54 +201,62 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
         tableName: String, partitionKey: Key, sortKey: Key?,
         columnName: String, av: AttributeValueUpdate, keys: Map<String, AttributeValue>
     ) {
+        val previousItem = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))?.associate {
+            it.name to it.type.toAttributeValue()
+        } ?: throw dynamoException("One of the required keys was not given a value")
         if (av.value() == null) {
-            deleteItem(DeleteItemRequest.builder()
-                .key(keys)
-                .tableName(tableName)
-                .build())
+            val newItem = previousItem.toMutableMap()
+            newItem.remove(columnName)
+            val itemsList = newItem.map { (k, v) -> AttributeInfo(k, v.toAttributeTypeInfo()) }
+            storage.updateItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
         } else {
-            val previousItem = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))?.associate {
-                it.name to it.type.toAttributeValue()
-            }
-            if (previousItem != null) {
-                val previousItemAttribute = previousItem[columnName]
-                if (previousItemAttribute != null) {
-                    val setType = checkAttributesForDelete(previousItemAttribute, av.value())
-                    val newItem = previousItem.toMutableMap()
-                    val diffSet = when (setType) {
-                        DynamoType.SS -> {
-                            val diffSet = previousItemAttribute.ss() - av.value().ss()
-                            newItem[columnName] = AttributeValue.builder()
-                                .ss(diffSet)
-                                .build()
-                            diffSet
+            val previousItemAttribute = previousItem[columnName]
+            if (previousItemAttribute != null) {
+                val setType = checkAttributesForDelete(previousItemAttribute, av.value())
+                val newItem = previousItem.toMutableMap()
+                val diffSet = when (setType) {
+                    DynamoType.SS -> {
+                        dynamoRequires(av.value().ss().isNotEmpty()) {
+                            "One or more parameter values were invalid: An string set may not be empty"
                         }
-                        DynamoType.NS -> {
-                            val diffSet = previousItemAttribute.ns() - av.value().ns()
-                            newItem[columnName] = AttributeValue.builder()
-                                .ns(diffSet)
-                                .build()
-                            diffSet
-                        }
-                        else -> {
-                            val diffSet = previousItemAttribute.bs() - av.value().bs()
-                            newItem[columnName] = AttributeValue.builder()
-                                .bs(diffSet)
-                                .build()
-                            diffSet
-                        }
+                        val diffSet = previousItemAttribute.ss() - av.value().ss()
+                        newItem[columnName] = AttributeValue.builder()
+                            .ss(diffSet)
+                            .build()
+                        diffSet
                     }
+                    DynamoType.NS -> {
+                        dynamoRequires(av.value().ns().isNotEmpty()) {
+                            "One or more parameter values were invalid: An number set may not be empty"
+                        }
+                        val diffSet = previousItemAttribute.ns() - av.value().ns()
+                        newItem[columnName] = AttributeValue.builder()
+                            .ns(diffSet)
+                            .build()
+                        diffSet
+                    }
+                    else -> {
+                        dynamoRequires(av.value().bs().isNotEmpty()) {
+                            "One or more parameter values were invalid: An binary set may not be empty"
+                        }
+                        val diffSet = previousItemAttribute.bs() - av.value().bs()
+                        newItem[columnName] = AttributeValue.builder()
+                            .bs(diffSet)
+                            .build()
+                        diffSet
+                    }
+                }
 
-                    if (diffSet.isEmpty()) {
-                        deleteItem(DeleteItemRequest.builder()
+                if (diffSet.isEmpty()) {
+                    deleteItem(
+                        DeleteItemRequest.builder()
                             .key(keys)
                             .tableName(tableName)
-                            .build())
-                    } else {
-                        val itemsList = newItem.map { (k, v) -> AttributeInfo(k, v.toAttributeTypeInfo()) }
-                        storage.updateItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
-                    }
-
+                            .build()
+                    )
+                } else {
+                    val itemsList = newItem.map { (k, v) -> AttributeInfo(k, v.toAttributeTypeInfo()) }
+                    storage.updateItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
                 }
             }
         }
@@ -306,7 +315,7 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
                             .build()
                     }
                     DynamoType.NS -> {
-                        val newSet = previousItemAttribute.ns() - av.value().ns()
+                        val newSet = previousItemAttribute.ns() + av.value().ns()
                         newItem[columnName] = AttributeValue.builder()
                             .ns(newSet)
                             .build()
@@ -346,6 +355,12 @@ class AWSDynamoDBMockService(private val storage: DataStorageLayer) {
 
         val attributeValues = request.attributeUpdates()
         attributeValues.forEach { (columnName, av) ->
+            if (key.containsKey(columnName)) {
+                throw dynamoException(
+                    "One or more parameter values were invalid: Cannot update attribute ${columnName}." +
+                        "This attribute is part of the key"
+                )
+            }
             if (av.action() == AttributeAction.PUT) {
                 putInUpdate(tableName, partitionKey, sortKey, columnName, av, key)
             } else if (av.action() == AttributeAction.DELETE) {

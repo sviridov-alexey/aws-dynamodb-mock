@@ -42,33 +42,19 @@ class AWSDynamoDBMock : DynamoDbClient {
 
     override fun scan(scanRequest: ScanRequest) = service.scan(scanRequest)
 
-    override fun putItem(putItemRequest: PutItemRequest): PutItemResponse {
-        return service.putItem(putItemRequest)
-    }
+    override fun putItem(putItemRequest: PutItemRequest) = service.putItem(putItemRequest)
 
-    override fun getItem(getItemRequest: GetItemRequest): GetItemResponse {
-        return service.getItem(getItemRequest)
-    }
+    override fun getItem(getItemRequest: GetItemRequest) = service.getItem(getItemRequest)
 
-    override fun deleteItem(deleteItemRequest: DeleteItemRequest): DeleteItemResponse {
-        return service.deleteItem(deleteItemRequest)
-    }
+    override fun deleteItem(deleteItemRequest: DeleteItemRequest) = service.deleteItem(deleteItemRequest)
 
-    override fun updateItem(updateItemRequest: UpdateItemRequest): UpdateItemResponse {
-        return service.updateItem(updateItemRequest)
-    }
+    override fun updateItem(updateItemRequest: UpdateItemRequest) = service.updateItem(updateItemRequest)
 
-    override fun batchWriteItem(batchWriteItemRequest: BatchWriteItemRequest): BatchWriteItemResponse {
-        return service.batchWriteItem(batchWriteItemRequest)
-    }
+    override fun batchWriteItem(batchWriteItemRequest: BatchWriteItemRequest) = service.batchWriteItem(batchWriteItemRequest)
 
-    fun loadCSV(fileName: String, tableName: String) {
-        service.loadCSV(fileName, tableName)
-    }
+    fun loadCSV(fileName: String, tableName: String) = service.loadCSV(fileName, tableName)
 
-    fun loadCSV(inputStream: InputStream, tableName: String) {
-        service.loadCSV(inputStream, tableName)
-    }
+    fun loadCSV(inputStream: InputStream, tableName: String) = service.loadCSV(inputStream, tableName)
 
     companion object {
         private const val SERVICE_NAME = "dynamodb"

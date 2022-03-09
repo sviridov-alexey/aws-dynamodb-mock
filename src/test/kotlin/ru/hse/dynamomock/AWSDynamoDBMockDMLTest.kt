@@ -11,6 +11,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import software.amazon.awssdk.core.SdkBytes
+import software.amazon.awssdk.services.dynamodb.model.AttributeAction
 import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemRequest
@@ -113,6 +114,13 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         mock.createTable(createTableRequest)
     }
 
+    private val defaultItem = mutableMapOf(
+        partitionKeyName to stringAV("value1"),
+        sortKeyName to numAV("1"),
+        "column3" to stringAV("i am string"),
+        "column10" to stringAV("87654")
+    )
+
     @BeforeEach
     fun createTable() {
         createTable(tableName)
@@ -140,8 +148,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @MethodSource("items")
     fun `test put and get item combo`(item: Map<String, AttributeValue>) {
         mock.putItem(putItemRequestBuilder(tableName, item))
-        val keys = item.entries.filter { i -> i.key == partitionKeyName || i.key == sortKeyName }
-            .associate { it.key to it.value }
+        val keys = keysFromItem(item, partitionKeyName, sortKeyName)
 
         val response = mock.getItem(
             getItemRequestBuilder(
@@ -164,8 +171,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         )
 
         mock.putItem(putItemRequestBuilder(tableName, item))
-        val keys = item.entries.filter { i -> i.key == partitionKeyName || i.key == sortKeyName }
-            .associate { it.key to it.value }
+        val keys = keysFromItem(item, partitionKeyName, sortKeyName)
 
         val response = mock.getItem(
             getItemRequestBuilder(
@@ -180,8 +186,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @ParameterizedTest
     @MethodSource("items")
     fun `test get not existing item`(item: Map<String, AttributeValue>) {
-        val keys = item.entries.filter { i -> i.key == partitionKeyName || i.key == sortKeyName }
-            .associate { it.key to it.value }
+        val keys = keysFromItem(item, partitionKeyName, sortKeyName)
 
         val response = mock.getItem(
             getItemRequestBuilder(
@@ -196,8 +201,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @ParameterizedTest
     @MethodSource("items")
     fun `test delete item`(item: Map<String, AttributeValue>) {
-        val keys = item.entries.filter { i -> i.key == partitionKeyName || i.key == sortKeyName }
-            .associate { it.key to it.value }
+        val keys = keysFromItem(item, partitionKeyName, sortKeyName)
 
         mock.putItem(putItemRequestBuilder(tableName, item))
         val getResponse = mock.getItem(getItemRequestBuilder(tableName, item.keys.toList(), keys))
@@ -216,8 +220,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @ParameterizedTest
     @MethodSource("items")
     fun `test attributes of delete item response`(item: Map<String, AttributeValue>) {
-        val keys = item.entries.filter { i -> i.key == partitionKeyName || i.key == sortKeyName }
-            .associate { it.key to it.value }
+        val keys = keysFromItem(item, partitionKeyName, sortKeyName)
         assertTrue(
             mock.deleteItem(deleteItemRequestBuilder(tableName, keys, ReturnValue.ALL_OLD)).attributes()
                 .isEmpty()
@@ -241,9 +244,9 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @Test
     fun `test wrong key name`() {
         val item = mapOf(
-            partitionKeyName + "1" to AttributeValue.builder().s("key2").build(),
-            sortKeyName to AttributeValue.builder().n("2").build(),
-            "column3" to AttributeValue.builder().s("i am string").build(),
+            partitionKeyName + "1" to stringAV("key2"),
+            sortKeyName to numAV("2"),
+            "column3" to stringAV("i am string"),
             "column4" to AttributeValue.builder().ss(listOf("we", "are", "strings")).build()
         )
         val request = putItemRequestBuilder(tableName, item)
@@ -256,9 +259,9 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @Test
     fun `test wrong key type`() {
         val item = mapOf(
-            partitionKeyName to AttributeValue.builder().n("1234").build(),
-            sortKeyName to AttributeValue.builder().n("2").build(),
-            "column3" to AttributeValue.builder().s("i am string").build(),
+            partitionKeyName to numAV("1234"),
+            sortKeyName to numAV("2"),
+            "column3" to stringAV("i am string"),
             "column4" to AttributeValue.builder().ss(listOf("we", "are", "strings")).build()
         )
         val request = putItemRequestBuilder(tableName, item)
@@ -271,9 +274,9 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @Test
     fun `test more keys than it should be`() {
         val item = mapOf(
-            partitionKeyName to AttributeValue.builder().s("key2").build(),
-            sortKeyName to AttributeValue.builder().n("2").build(),
-            "column3" to AttributeValue.builder().s("i am string").build(),
+            partitionKeyName to stringAV("key2"),
+            sortKeyName to numAV("2"),
+            "column3" to stringAV("i am string"),
         )
         val request = getItemRequestBuilder(tableName, item.keys.toList(), item)
 
@@ -286,8 +289,8 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     fun `test key type not from b, n, s`() {
         val item = mapOf(
             partitionKeyName to AttributeValue.builder().ss(listOf("key2")).build(),
-            sortKeyName to AttributeValue.builder().n("2").build(),
-            "column3" to AttributeValue.builder().s("i am string").build(),
+            sortKeyName to numAV("2"),
+            "column3" to stringAV("i am string"),
             "column4" to AttributeValue.builder().ss(listOf("we", "are", "strings")).build()
         )
         val request = putItemRequestBuilder(tableName, item)
@@ -299,9 +302,9 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @Test
     fun `test wrong table name`() {
         val item = mapOf(
-            partitionKeyName to AttributeValue.builder().s("key2").build(),
-            sortKeyName to AttributeValue.builder().n("2").build(),
-            "column3" to AttributeValue.builder().s("i am string").build(),
+            partitionKeyName to stringAV("key2"),
+            sortKeyName to numAV("2"),
+            "column3" to stringAV("i am string"),
             "column4" to AttributeValue.builder().ss(listOf("we", "are", "strings")).build()
         )
         val request = putItemRequestBuilder("wrongTableName", item)
@@ -313,14 +316,14 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @Test
     fun `test different sort keys`() {
         val item = mapOf(
-            partitionKeyName to AttributeValue.builder().s("key2").build(),
-            sortKeyName to AttributeValue.builder().n("2").build(),
-            "column3" to AttributeValue.builder().s("i am string").build()
+            partitionKeyName to stringAV("key2"),
+            sortKeyName to numAV("2"),
+            "column3" to stringAV("i am string")
         )
 
         val newKeys = mapOf(
-            partitionKeyName to AttributeValue.builder().s("key2").build(),
-            sortKeyName to AttributeValue.builder().n("3").build()
+            partitionKeyName to stringAV("key2"),
+            sortKeyName to numAV("3")
         )
 
         val request = putItemRequestBuilder(tableName, item)
@@ -337,14 +340,14 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @Test
     fun `test different partition keys`() {
         val item = mapOf(
-            partitionKeyName to AttributeValue.builder().s("key2").build(),
-            sortKeyName to AttributeValue.builder().n("2").build(),
-            "column3" to AttributeValue.builder().s("i am string").build()
+            partitionKeyName to stringAV("key2"),
+            sortKeyName to numAV("2"),
+            "column3" to stringAV("i am string")
         )
 
         val newKeys = mapOf(
-            partitionKeyName to AttributeValue.builder().s("different key").build(),
-            sortKeyName to AttributeValue.builder().n("2").build()
+            partitionKeyName to stringAV("different key"),
+            sortKeyName to numAV("2")
         )
 
         val request = putItemRequestBuilder(tableName, item)
@@ -400,8 +403,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @ParameterizedTest
     @MethodSource("items")
     fun `batchWriteItem putRequest and deleteRequest in one`(item: Map<String, AttributeValue>) {
-        val keys = item.entries.filter { i -> i.key == partitionKeyName || i.key == sortKeyName }
-            .associate { it.key to it.value }
+        val keys = keysFromItem(item, partitionKeyName, sortKeyName)
         val requestItems =
             mapOf<String, List<WriteRequest>>(
                 "testTable" to listOf(
@@ -467,9 +469,9 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         for (i in 0..25) {
             str.plus("1")
             val item : Map<String, AttributeValue> = mapOf(
-                partitionKeyName to AttributeValue.builder().s(str).build(),
-                sortKeyName to AttributeValue.builder().n("123.3667").build(),
-                "column4" to AttributeValue.builder().s("column4").build()
+                partitionKeyName to stringAV(str),
+                sortKeyName to numAV("123.3667"),
+                "column4" to stringAV("column4")
             )
             itemsList.add(WriteRequest.builder()
                 .putRequest(
@@ -500,9 +502,9 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         for (i in 0..13) {
             str += "1"
             val item : Map<String, AttributeValue> = mapOf(
-                partitionKeyName to AttributeValue.builder().s(str).build(),
-                sortKeyName to AttributeValue.builder().n("123.3667").build(),
-                "column4" to AttributeValue.builder().s("column4").build()
+                partitionKeyName to stringAV(str),
+                sortKeyName to numAV("123.3667"),
+                "column4" to stringAV("column4")
             )
             itemsList.add(WriteRequest.builder()
                 .putRequest(
@@ -519,8 +521,8 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         for (i in 0..12) {
             str2 += "1"
             val item : Map<String, AttributeValue> = mapOf(
-                partitionKeyName to AttributeValue.builder().s(str2).build(),
-                sortKeyName to AttributeValue.builder().n("123.3667").build(),
+                partitionKeyName to stringAV(str2),
+                sortKeyName to numAV("123.3667"),
             )
             itemsList2.add(WriteRequest.builder()
                 .putRequest(
@@ -672,27 +674,19 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
     @Test
     fun `BatchWriteItem replace test`() {
-        val oldItem = mapOf(
-            partitionKeyName to AttributeValue.builder().s("value1").build(),
-            sortKeyName to AttributeValue.builder().n("1").build(),
-            "column3" to AttributeValue.builder().s("i am string").build(),
-            "column10" to AttributeValue.builder().s("87654").build()
-        )
+        mock.putItem(putItemRequestBuilder(tableName, defaultItem))
 
-        mock.putItem(putItemRequestBuilder(tableName, oldItem))
-
-        val keys = oldItem.entries.filter { i -> i.key == partitionKeyName || i.key == sortKeyName }
-            .associate { it.key to it.value }
+        val keys = keysFromItem(defaultItem, partitionKeyName, sortKeyName)
 
         val response1 = mock.getItem(
             getItemRequestBuilder(
                 tableName,
-                oldItem.keys.toList(),
+                defaultItem.keys.toList(),
                 keys
             )
         )
 
-        assertEquals(oldItem, response1.item())
+        assertEquals(defaultItem, response1.item())
 
         val requestItems =
             mapOf<String, List<WriteRequest>>(
@@ -721,4 +715,379 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
         assertEquals(item1, response2.item())
     }
+
+
+    // update item
+
+    @Test
+    fun `updateItem put (replace old)`() {
+        mock.putItem(putItemRequestBuilder(tableName, defaultItem))
+
+        val keys = keysFromItem(defaultItem, partitionKeyName, sortKeyName)
+
+        mock.updateItem(
+            updateItemRequestBuilder(
+                tableName, keys, mapOf(
+                    "column3" to attributeValueUpdateBuilder(
+                        AttributeAction.PUT, stringAV("hehe")
+                    )
+                )
+            )
+        )
+
+        val response1 = mock.getItem(
+            getItemRequestBuilder(
+                tableName,
+                defaultItem.keys.toList(),
+                keys
+            )
+        )
+
+        defaultItem["column3"] = stringAV("hehe")
+        assertEquals(defaultItem, response1.item())
+    }
+
+    @Test
+    fun `updateItem throws if value is key`() {
+        mock.putItem(putItemRequestBuilder(tableName, defaultItem))
+
+        val keys = keysFromItem(defaultItem, partitionKeyName, sortKeyName)
+
+        assertThrows<DynamoDbException> {
+            mock.updateItem(
+                updateItemRequestBuilder(
+                    tableName, keys,
+                    mapOf(
+                        partitionKeyName to attributeValueUpdateBuilder(
+                            AttributeAction.PUT, stringAV("hehe")
+                        )
+                    )
+                )
+            )
+        }
+
+        assertThrows<DynamoDbException> {
+            mock.updateItem(
+                updateItemRequestBuilder(
+                    tableName, keys,
+                    mapOf(
+                        partitionKeyName to attributeValueUpdateBuilder(
+                            AttributeAction.DELETE
+                        )
+                    )
+                )
+            )
+        }
+
+        assertThrows<DynamoDbException> {
+            mock.updateItem(
+                updateItemRequestBuilder(
+                    tableName, keys,
+                    mapOf(
+                        partitionKeyName to attributeValueUpdateBuilder(
+                            AttributeAction.ADD, stringAV("hehe")
+                        )
+                    )
+                )
+            )
+        }
+
+    }
+
+    @Test
+    fun `updateItem put new attribute`() {
+        val name = "newColumn"
+        val value = "hehe"
+        mock.putItem(putItemRequestBuilder(tableName, defaultItem))
+
+        val keys = keysFromItem(defaultItem, partitionKeyName, sortKeyName)
+
+        mock.updateItem(
+            updateItemRequestBuilder(
+                tableName, keys, mapOf(
+                    name to attributeValueUpdateBuilder(
+                        AttributeAction.PUT, stringAV(value)
+                    )
+                )
+            )
+        )
+
+        val response1 = mock.getItem(
+            getItemRequestBuilder(
+                tableName,
+                defaultItem.keys.toList() + name,
+                keys
+            )
+        )
+
+        defaultItem[name] = stringAV(value)
+        assertEquals(defaultItem, response1.item())
+    }
+
+    @Test
+    fun `updateItem put new item`() {
+        val item = keysFromItem(defaultItem, partitionKeyName, sortKeyName).toMutableMap()
+
+        val name = "newColumn"
+        val value = "hehe"
+
+        mock.updateItem(
+            updateItemRequestBuilder(
+                tableName, item, mapOf(
+                    name to attributeValueUpdateBuilder(
+                        AttributeAction.PUT, stringAV(value)
+                    )
+                )
+            )
+        )
+
+        val response1 = mock.getItem(
+            getItemRequestBuilder(
+                tableName,
+                item.keys.toList() + name,
+                item
+            )
+        )
+
+        item[name] = stringAV(value)
+        assertEquals(item, response1.item())
+    }
+
+    @Test
+    fun `updateItem delete whole attribute`() {
+        mock.putItem(putItemRequestBuilder(tableName, defaultItem))
+
+        val keys = keysFromItem(defaultItem, partitionKeyName, sortKeyName)
+
+        mock.updateItem(
+            updateItemRequestBuilder(
+                tableName, keys, mapOf(
+                    "column3" to attributeValueUpdateBuilder(
+                        AttributeAction.DELETE
+                    )
+                )
+            )
+        )
+
+        val response1 = mock.getItem(
+            getItemRequestBuilder(
+                tableName,
+                defaultItem.keys.toList(),
+                keys
+            )
+        )
+
+        defaultItem.remove("column3")
+        assertEquals(defaultItem, response1.item())
+    }
+
+    @Test
+    fun `updateItem delete from set`() {
+        defaultItem["coolSet"] = AttributeValue.builder()
+            .ss("a", "b", "c")
+            .build()
+        mock.putItem(putItemRequestBuilder(tableName, defaultItem))
+
+        val keys = keysFromItem(defaultItem, partitionKeyName, sortKeyName)
+
+        mock.updateItem(
+            updateItemRequestBuilder(
+                tableName, keys, mapOf(
+                    "coolSet" to attributeValueUpdateBuilder(
+                        AttributeAction.DELETE,
+                        AttributeValue.builder()
+                            .ss("a", "c")
+                            .build()
+                    )
+                )
+            )
+        )
+
+        val response1 = mock.getItem(
+            getItemRequestBuilder(
+                tableName,
+                defaultItem.keys.toList(),
+                keys
+            )
+        )
+        defaultItem["coolSet"] = AttributeValue.builder()
+            .ss("b")
+            .build()
+
+        assertEquals(defaultItem, response1.item())
+    }
+
+    @Test
+    fun `updateItem delete from set (specifying an empty set is an error)`() {
+        defaultItem["coolSet"] = AttributeValue.builder()
+            .ss("a", "b", "c")
+            .build()
+        mock.putItem(putItemRequestBuilder(tableName, defaultItem))
+
+        val keys = keysFromItem(defaultItem, partitionKeyName, sortKeyName)
+
+        assertThrows<DynamoDbException> {
+            mock.updateItem(
+                updateItemRequestBuilder(
+                    tableName, keys, mapOf(
+                        "coolSet" to attributeValueUpdateBuilder(
+                            AttributeAction.DELETE,
+                            AttributeValue.builder()
+                                .ss(listOf())
+                                .build()
+                        )
+                    )
+                )
+            )
+        }
+
+    }
+
+    @Test
+    fun `updateItem delete not set error`() {
+        defaultItem["coolNumber"] = AttributeValue.builder()
+            .n("666")
+            .build()
+        mock.putItem(putItemRequestBuilder(tableName, defaultItem))
+
+        val keys = keysFromItem(defaultItem, partitionKeyName, sortKeyName)
+
+        assertThrows<DynamoDbException> {
+            mock.updateItem(
+                updateItemRequestBuilder(
+                    tableName, keys, mapOf(
+                        "coolNumber" to attributeValueUpdateBuilder(
+                            AttributeAction.DELETE,
+                            AttributeValue.builder()
+                                .n("666")
+                                .build()
+                        )
+                    )
+                )
+            )
+        }
+
+    }
+
+
+    @Test
+    fun `updateItem add to set`() {
+        defaultItem["coolSet"] = AttributeValue.builder()
+            .ns("1", "2")
+            .build()
+        mock.putItem(putItemRequestBuilder(tableName, defaultItem))
+
+        val keys = keysFromItem(defaultItem, partitionKeyName, sortKeyName)
+
+        mock.updateItem(
+            updateItemRequestBuilder(
+                tableName, keys, mapOf(
+                    "coolSet" to attributeValueUpdateBuilder(
+                        AttributeAction.ADD,
+                        AttributeValue.builder()
+                            .ns("3")
+                            .build()
+                    )
+                )
+            )
+        )
+
+        val response1 = mock.getItem(
+            getItemRequestBuilder(
+                tableName,
+                defaultItem.keys.toList(),
+                keys
+            )
+        )
+        defaultItem["coolSet"] = AttributeValue.builder()
+            .ns("1", "2", "3")
+            .build()
+
+        assertEquals(defaultItem, response1.item())
+    }
+
+    @Test
+    fun `updateItem add new number attribute`() {
+        val name = "newColumn"
+        val value = "666"
+        mock.putItem(putItemRequestBuilder(tableName, defaultItem))
+
+        val keys = keysFromItem(defaultItem, partitionKeyName, sortKeyName)
+
+        mock.updateItem(
+            updateItemRequestBuilder(
+                tableName, keys, mapOf(
+                    name to attributeValueUpdateBuilder(
+                        AttributeAction.ADD, numAV(value)
+                    )
+                )
+            )
+        )
+
+        val response1 = mock.getItem(
+            getItemRequestBuilder(
+                tableName,
+                defaultItem.keys.toList() + name,
+                keys
+            )
+        )
+
+        defaultItem[name] = numAV(value)
+        assertEquals(defaultItem, response1.item())
+    }
+
+    @Test
+    fun `updateItem add new string attribute`() {
+        val name = "newColumn"
+        val value = "wrongType"
+        mock.putItem(putItemRequestBuilder(tableName, defaultItem))
+
+        val keys = keysFromItem(defaultItem, partitionKeyName, sortKeyName)
+
+        assertThrows<DynamoDbException> {
+            mock.updateItem(
+                updateItemRequestBuilder(
+                    tableName, keys, mapOf(
+                        name to attributeValueUpdateBuilder(
+                            AttributeAction.ADD, stringAV(value)
+                        )
+                    )
+                )
+
+            )
+        }
+    }
+
+    @Test
+    fun `updateItem add and sum number`() {
+        val name = "coolNumber"
+        defaultItem[name] = AttributeValue.builder()
+            .n("30")
+            .build()
+        mock.putItem(putItemRequestBuilder(tableName, defaultItem))
+
+        val keys = keysFromItem(defaultItem, partitionKeyName, sortKeyName)
+
+        mock.updateItem(
+            updateItemRequestBuilder(
+                tableName, keys, mapOf(
+                    name to attributeValueUpdateBuilder(
+                        AttributeAction.ADD, numAV("70")
+                    )
+                )
+            )
+        )
+
+        val response1 = mock.getItem(
+            getItemRequestBuilder(
+                tableName,
+                defaultItem.keys.toList() + name,
+                keys
+            )
+        )
+
+        defaultItem[name] = numAV("100")
+        assertEquals(defaultItem, response1.item())
+    }
+
 }
