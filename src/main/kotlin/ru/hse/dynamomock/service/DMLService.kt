@@ -9,12 +9,13 @@ import ru.hse.dynamomock.model.DBGetItemRequest
 import ru.hse.dynamomock.model.DBPutItemRequest
 import ru.hse.dynamomock.model.DynamoType
 import ru.hse.dynamomock.model.Key
-import ru.hse.dynamomock.model.NumKey
-import ru.hse.dynamomock.model.StringKey
 import ru.hse.dynamomock.model.TableMetadata
 import ru.hse.dynamomock.model.toAttributeTypeInfo
+import ru.hse.dynamomock.model.utils.checkAttributeValue
+import ru.hse.dynamomock.model.utils.getKeyFromMetadata
+import ru.hse.dynamomock.model.utils.getSortKeyFromMetadata
+import ru.hse.dynamomock.model.utils.itemToAttributeInfo
 import software.amazon.awssdk.services.dynamodb.model.AttributeAction
-import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.AttributeValueUpdate
 import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemRequest
@@ -29,47 +30,11 @@ import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException
 import software.amazon.awssdk.services.dynamodb.model.ReturnValue
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemResponse
-import java.util.Base64
 
 class DMLService(
     private val storage: DataStorageLayer,
     private val tablesMetadata: MutableMap<String, TableMetadata>
 ) {
-    private fun toKey(keyName: String, attributeValue: AttributeValue): Pair<DynamoType, Key> =
-        if (attributeValue.s() != null) {
-            DynamoType.S to StringKey(keyName, attributeValue.s())
-        } else if (attributeValue.n() != null) {
-            DynamoType.N to NumKey(keyName, attributeValue.n().toBigDecimal())
-        } else if (attributeValue.b() != null) {
-            DynamoType.B to StringKey(keyName, Base64.getEncoder().encodeToString(attributeValue.b().asByteArray()))
-        } else {
-            throw dynamoException("Member must satisfy enum value set: [B, N, S]")
-        }
-
-    private fun getKeyFromMetadata(
-        keyName: String,
-        keys: Map<String, AttributeValue>,
-        attributeDefinitions: List<AttributeDefinition>
-    ): Key {
-        val keyAttributeValue = keys[keyName] ?: throw dynamoException("One of the required keys was not given a value")
-        val (keyType, key) = toKey(keyName, keyAttributeValue)
-        val expectedKeyType = attributeDefinitions.firstOrNull { it.attributeName() == keyName }
-            ?: throw dynamoException("One of the required keys was not given a value")
-        dynamoRequires(expectedKeyType.attributeTypeAsString().uppercase() == keyType.name) {
-            "Invalid attribute value type"
-        }
-        return key
-    }
-
-    private fun getSortKeyFromMetadata(
-        sortKeyName: String?,
-        keys: Map<String, AttributeValue>,
-        attributeDefinitions: List<AttributeDefinition>
-    ): Key? {
-        sortKeyName ?: return null
-
-        return getKeyFromMetadata(sortKeyName, keys, attributeDefinitions)
-    }
 
     private fun getRequestMetadata(tableName: String, keys: Map<String, AttributeValue>): Pair<Key, Key?> {
         val tableMetadata = tablesMetadata[tableName] ?: throw ResourceNotFoundException.builder()
@@ -98,9 +63,6 @@ class DMLService(
             throw dynamoException("The number of conditions on the keys is invalid")
         }
     }
-
-    private fun itemToAttributeInfo(item: Map<String, AttributeValue>) =
-        item.map { (k, v) -> AttributeInfo(k, v.toAttributeTypeInfo()) }
 
     fun putItem(request: PutItemRequest): PutItemResponse {
         val tableName = request.tableName()
@@ -167,18 +129,6 @@ class DMLService(
         columnName: String,
         attributeValue: AttributeValue
     ): Map<String, AttributeValue> = mapOf(columnName to attributeValue) + keys
-
-    private fun checkAttributeValue(av: AttributeValue): DynamoType = when {
-        av.n() != null -> DynamoType.N
-        av.s() != null -> DynamoType.S
-        av.b() != null -> DynamoType.B
-        av.hasSs() -> DynamoType.SS
-        av.hasNs() -> DynamoType.NS
-        av.hasBs() -> DynamoType.BS
-        av.hasL() -> DynamoType.L
-        av.hasM() -> DynamoType.M
-        else -> throw dynamoException("Supplied AttributeValue is empty, must contain exactly one of the supported datatypes")
-    }
 
     private fun checkAttributesForDelete(first: AttributeValue, second: AttributeValue): DynamoType {
         val firstType = checkAttributeValue(first)
@@ -327,12 +277,7 @@ class DMLService(
         if (previousItem == null) {
             // todo: ADD - Causes DynamoDB to create an item with the supplied primary key and number (or set of numbers)
             // for the attribute value. The only data types allowed are Number and Number Set.
-            val itemsList = buildItem(keys, columnName, av.value()).map { (k, v) ->
-                AttributeInfo(
-                    k,
-                    v.toAttributeTypeInfo()
-                )
-            }
+            val itemsList = itemToAttributeInfo(buildItem(keys, columnName, av.value()))
             storage.putItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
         } else {
             val previousItemAttribute = previousItem[columnName]
