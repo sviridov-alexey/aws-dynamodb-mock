@@ -3,7 +3,11 @@
 package ru.hse.dynamomock
 
 import ru.hse.dynamomock.db.ExposedStorage
+import ru.hse.dynamomock.model.TableMetadata
 import ru.hse.dynamomock.service.AWSDynamoDBMockService
+import ru.hse.dynamomock.service.DDLService
+import ru.hse.dynamomock.service.DMLService
+import ru.hse.dynamomock.service.SelectService
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.*
@@ -11,7 +15,18 @@ import java.util.concurrent.CompletableFuture
 import java.io.InputStream
 
 class AWSDynamoDBMock : DynamoDbClient {
-    private val service by lazy { AWSDynamoDBMockService(ExposedStorage()) }
+    private val service: AWSDynamoDBMockService
+
+    init {
+        val storage = ExposedStorage()
+        val tablesMetadata = mutableMapOf<String, TableMetadata>()
+        val ddlService = DDLService(storage, tablesMetadata)
+        val dmlService = DMLService(storage, tablesMetadata)
+        val selectService = SelectService(storage, tablesMetadata)
+        service = AWSDynamoDBMockService(
+            storage, ddlService, dmlService, selectService
+        )
+    }
 
     override fun close() = service.close()
 

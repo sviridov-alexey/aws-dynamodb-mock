@@ -883,7 +883,8 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
     @Test
     fun `updateItem delete from set`() {
-        defaultItem["coolSet"] = AttributeValue.builder()
+        val name = "coolSet"
+        defaultItem[name] = AttributeValue.builder()
             .ss("a", "b", "c")
             .build()
         mock.putItem(putItemRequestBuilder(tableName, defaultItem))
@@ -893,7 +894,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         mock.updateItem(
             updateItemRequestBuilder(
                 tableName, keys, mapOf(
-                    "coolSet" to attributeValueUpdateBuilder(
+                    name to attributeValueUpdateBuilder(
                         AttributeAction.DELETE,
                         AttributeValue.builder()
                             .ss("a", "c")
@@ -910,7 +911,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
                 keys
             )
         )
-        defaultItem["coolSet"] = AttributeValue.builder()
+        defaultItem[name] = AttributeValue.builder()
             .ss("b")
             .build()
 
@@ -919,7 +920,8 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
     @Test
     fun `updateItem delete from set (specifying an empty set is an error)`() {
-        defaultItem["coolSet"] = AttributeValue.builder()
+        val name = "coolSet"
+        defaultItem[name] = AttributeValue.builder()
             .ss("a", "b", "c")
             .build()
         mock.putItem(putItemRequestBuilder(tableName, defaultItem))
@@ -930,7 +932,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             mock.updateItem(
                 updateItemRequestBuilder(
                     tableName, keys, mapOf(
-                        "coolSet" to attributeValueUpdateBuilder(
+                        name to attributeValueUpdateBuilder(
                             AttributeAction.DELETE,
                             AttributeValue.builder()
                                 .ss(listOf())
@@ -945,7 +947,8 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
     @Test
     fun `updateItem delete not set error`() {
-        defaultItem["coolNumber"] = AttributeValue.builder()
+        val name = "coolNumber"
+        defaultItem[name] = AttributeValue.builder()
             .n("666")
             .build()
         mock.putItem(putItemRequestBuilder(tableName, defaultItem))
@@ -956,7 +959,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             mock.updateItem(
                 updateItemRequestBuilder(
                     tableName, keys, mapOf(
-                        "coolNumber" to attributeValueUpdateBuilder(
+                        name to attributeValueUpdateBuilder(
                             AttributeAction.DELETE,
                             AttributeValue.builder()
                                 .n("666")
@@ -972,6 +975,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
     @Test
     fun `updateItem add to set`() {
+        val name = "coolSet"
         defaultItem["coolSet"] = AttributeValue.builder()
             .ns("1", "2")
             .build()
@@ -982,7 +986,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         mock.updateItem(
             updateItemRequestBuilder(
                 tableName, keys, mapOf(
-                    "coolSet" to attributeValueUpdateBuilder(
+                    name to attributeValueUpdateBuilder(
                         AttributeAction.ADD,
                         AttributeValue.builder()
                             .ns("3")
@@ -999,7 +1003,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
                 keys
             )
         )
-        defaultItem["coolSet"] = AttributeValue.builder()
+        defaultItem[name] = AttributeValue.builder()
             .ns("1", "2", "3")
             .build()
 
