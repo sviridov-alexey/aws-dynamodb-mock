@@ -2,8 +2,69 @@ package ru.hse.dynamomock
 
 import org.junit.jupiter.api.BeforeEach
 import ru.hse.dynamomock.model.TableMetadata
+import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.services.dynamodb.model.*
 import java.time.Instant
+
+fun boolAV(
+    b: Boolean
+): AttributeValue = AttributeValue.builder()
+    .bool(b)
+    .build()
+
+fun stringAV(
+    s: String
+): AttributeValue = AttributeValue.builder()
+    .s(s)
+    .build()
+
+fun numAV(
+    n: String
+): AttributeValue = AttributeValue.builder()
+    .n(n)
+    .build()
+
+fun binaryAV(
+    b: SdkBytes
+): AttributeValue = AttributeValue.builder()
+    .b(b)
+    .build()
+
+fun nulAV(
+    nul: Boolean
+): AttributeValue = AttributeValue.builder()
+    .nul(nul)
+    .build()
+
+fun stringListAV(
+    ss: List<String>
+): AttributeValue = AttributeValue.builder()
+    .ss(ss)
+    .build()
+
+fun numListAV(
+    ns: List<String>
+): AttributeValue = AttributeValue.builder()
+    .ns(ns)
+    .build()
+
+fun binaryListAV(
+    bs: List<SdkBytes>
+): AttributeValue = AttributeValue.builder()
+    .bs(bs)
+    .build()
+
+fun listAV(
+    l: Collection<AttributeValue>
+): AttributeValue = AttributeValue.builder()
+    .l(l)
+    .build()
+
+fun mapAV(
+    m: Map<String, AttributeValue>
+): AttributeValue = AttributeValue.builder()
+    .m(m)
+    .build()
 
 internal open class AWSDynamoDBMockTest {
     protected lateinit var mock: AWSDynamoDBMock
@@ -94,18 +155,6 @@ internal open class AWSDynamoDBMockTest {
     ) =
         item.entries.filter { i -> i.key == AWSDynamoDBMockDMLTest.partitionKeyName || i.key == AWSDynamoDBMockDMLTest.sortKeyName }
             .associate { it.key to it.value }
-
-    protected fun stringAV(
-        s: String
-    ): AttributeValue = AttributeValue.builder()
-        .s(s)
-        .build()
-
-    protected fun numAV(
-        n: String
-    ): AttributeValue = AttributeValue.builder()
-        .n(n)
-        .build()
 
 
     companion object {

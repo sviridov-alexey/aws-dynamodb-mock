@@ -34,33 +34,33 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         const val tableName = "testTable"
 
         val item1 = mapOf(
-            partitionKeyName to AttributeValue.builder().s("value1").build(),
-            sortKeyName to AttributeValue.builder().n("1").build(),
-            "column2" to AttributeValue.builder().n("123.367").build()
+            partitionKeyName to stringAV("value1"),
+            sortKeyName to numAV("1"),
+            "column2" to numAV("123.367")
         )
 
         val item2 =  mapOf(
-            partitionKeyName to AttributeValue.builder().s("key2").build(),
-            sortKeyName to AttributeValue.builder().n("2").build(),
-            "column3" to AttributeValue.builder().s("i am string").build(),
-            "column4" to AttributeValue.builder().ss(listOf("we", "are", "strings")).build()
+            partitionKeyName to stringAV("key2"),
+            sortKeyName to numAV("2"),
+            "column3" to stringAV("i am string"),
+            "column4" to stringListAV(listOf("we", "are", "strings"))
         )
 
         val item3 = mapOf(
-            partitionKeyName to AttributeValue.builder().s("ssssnake").build(),
-            sortKeyName to AttributeValue.builder().n("30").build(),
-            "column5" to AttributeValue.builder().s("not number 5").build(),
-            "column4" to AttributeValue.builder().ns(listOf("67", "2", "0.5")).build()
+            partitionKeyName to stringAV("ssssnake"),
+            sortKeyName to numAV("30"),
+            "column5" to stringAV("not number 5"),
+            "column4" to numListAV(listOf("67", "2", "0.5"))
         )
 
         @JvmStatic
         fun items(): List<Arguments> {
             val arr = ByteArray(20)
             val b = SdkBytes.fromByteArray(Random.nextBytes(arr))
-            val mapAttributeValue = mapOf<String, AttributeValue>(
-                "kuku" to AttributeValue.builder().s("ha").build(),
-                "hseee" to AttributeValue.builder().s(":)").build(),
-                "scary" to AttributeValue.builder().n("666").build()
+            val mapAttributeValue = mapOf(
+                "kuku" to stringAV("ha"),
+                "hseee" to stringAV(":)"),
+                "scary" to numAV("666")
             )
 
             return listOf(
@@ -69,20 +69,27 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
                 Arguments.of(item3),
                 Arguments.of(
                     mapOf(
-                        partitionKeyName to AttributeValue.builder().s("key2").build(),
-                        sortKeyName to AttributeValue.builder().n("2").build(),
-                        "column3" to AttributeValue.builder().b(b).build(),
-                        "column4" to AttributeValue.builder().bs(listOf(b, b)).build(),
-                        "column5" to AttributeValue.builder().bool(true).build(),
-                        "column6" to AttributeValue.builder().nul(true).build(),
-                        "listColumn" to AttributeValue.builder().l(mapAttributeValue.values).build(),
-                        "mapColumn" to AttributeValue.builder().m(mapAttributeValue).build(),
-                        "ns" to AttributeValue.builder().ns("100", "101").build(),
+                        partitionKeyName to stringAV("key2"),
+                        sortKeyName to numAV("2"),
+                        "column3" to binaryAV(b),
+                        "column4" to binaryListAV(listOf(b, b)),
+                        "column5" to boolAV(true),
+                        "column6" to nulAV(true),
+                        "listColumn" to listAV(mapAttributeValue.values),
+                        "mapColumn" to mapAV(mapAttributeValue),
+                        "ns" to numListAV(listOf("100", "101")),
                     )
                 )
             )
         }
     }
+
+    private val defaultItem = mutableMapOf(
+        partitionKeyName to stringAV("value1"),
+        sortKeyName to numAV("1"),
+        "column3" to stringAV("i am string"),
+        "column10" to stringAV("87654")
+    )
 
     private fun createTable(name: String) {
         val attributeDefinitions = listOf<AttributeDefinition>(
@@ -113,13 +120,6 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             .build()
         mock.createTable(createTableRequest)
     }
-
-    private val defaultItem = mutableMapOf(
-        partitionKeyName to stringAV("value1"),
-        sortKeyName to numAV("1"),
-        "column3" to stringAV("i am string"),
-        "column10" to stringAV("87654")
-    )
 
     @BeforeEach
     fun createTable() {
@@ -247,7 +247,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             partitionKeyName + "1" to stringAV("key2"),
             sortKeyName to numAV("2"),
             "column3" to stringAV("i am string"),
-            "column4" to AttributeValue.builder().ss(listOf("we", "are", "strings")).build()
+            "column4" to stringListAV(listOf("we", "are", "strings"))
         )
         val request = putItemRequestBuilder(tableName, item)
 
@@ -262,7 +262,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             partitionKeyName to numAV("1234"),
             sortKeyName to numAV("2"),
             "column3" to stringAV("i am string"),
-            "column4" to AttributeValue.builder().ss(listOf("we", "are", "strings")).build()
+            "column4" to stringListAV(listOf("we", "are", "strings"))
         )
         val request = putItemRequestBuilder(tableName, item)
 
@@ -288,10 +288,10 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @Test
     fun `test key type not from b, n, s`() {
         val item = mapOf(
-            partitionKeyName to AttributeValue.builder().ss(listOf("key2")).build(),
+            partitionKeyName to stringListAV(listOf("key2")),
             sortKeyName to numAV("2"),
             "column3" to stringAV("i am string"),
-            "column4" to AttributeValue.builder().ss(listOf("we", "are", "strings")).build()
+            "column4" to stringListAV(listOf("we", "are", "strings"))
         )
         val request = putItemRequestBuilder(tableName, item)
         assertThat {
@@ -305,7 +305,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             partitionKeyName to stringAV("key2"),
             sortKeyName to numAV("2"),
             "column3" to stringAV("i am string"),
-            "column4" to AttributeValue.builder().ss(listOf("we", "are", "strings")).build()
+            "column4" to stringListAV(listOf("we", "are", "strings"))
         )
         val request = putItemRequestBuilder("wrongTableName", item)
         assertThat {
@@ -884,9 +884,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @Test
     fun `updateItem delete from set`() {
         val name = "coolSet"
-        defaultItem[name] = AttributeValue.builder()
-            .ss("a", "b", "c")
-            .build()
+        defaultItem[name] = stringListAV(listOf("a", "b", "c"))
         mock.putItem(putItemRequestBuilder(tableName, defaultItem))
 
         val keys = keysFromItem(defaultItem, partitionKeyName, sortKeyName)
@@ -896,9 +894,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
                 tableName, keys, mapOf(
                     name to attributeValueUpdateBuilder(
                         AttributeAction.DELETE,
-                        AttributeValue.builder()
-                            .ss("a", "c")
-                            .build()
+                        stringListAV(listOf("a", "c"))
                     )
                 )
             )
@@ -911,9 +907,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
                 keys
             )
         )
-        defaultItem[name] = AttributeValue.builder()
-            .ss("b")
-            .build()
+        defaultItem[name] = stringListAV(listOf("b"))
 
         assertEquals(defaultItem, response1.item())
     }
@@ -921,9 +915,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @Test
     fun `updateItem delete from set (specifying an empty set is an error)`() {
         val name = "coolSet"
-        defaultItem[name] = AttributeValue.builder()
-            .ss("a", "b", "c")
-            .build()
+        defaultItem[name] = stringListAV(listOf("a", "b", "c"))
         mock.putItem(putItemRequestBuilder(tableName, defaultItem))
 
         val keys = keysFromItem(defaultItem, partitionKeyName, sortKeyName)
@@ -934,9 +926,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
                     tableName, keys, mapOf(
                         name to attributeValueUpdateBuilder(
                             AttributeAction.DELETE,
-                            AttributeValue.builder()
-                                .ss(listOf())
-                                .build()
+                            stringListAV(listOf())
                         )
                     )
                 )
@@ -976,9 +966,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @Test
     fun `updateItem add to set`() {
         val name = "coolSet"
-        defaultItem["coolSet"] = AttributeValue.builder()
-            .ns("1", "2")
-            .build()
+        defaultItem["coolSet"] = numListAV(listOf("1", "2"))
         mock.putItem(putItemRequestBuilder(tableName, defaultItem))
 
         val keys = keysFromItem(defaultItem, partitionKeyName, sortKeyName)
@@ -988,9 +976,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
                 tableName, keys, mapOf(
                     name to attributeValueUpdateBuilder(
                         AttributeAction.ADD,
-                        AttributeValue.builder()
-                            .ns("3")
-                            .build()
+                        numListAV(listOf("3"))
                     )
                 )
             )
@@ -1003,9 +989,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
                 keys
             )
         )
-        defaultItem[name] = AttributeValue.builder()
-            .ns("1", "2", "3")
-            .build()
+        defaultItem[name] = numListAV(listOf("1", "2", "3"))
 
         assertEquals(defaultItem, response1.item())
     }

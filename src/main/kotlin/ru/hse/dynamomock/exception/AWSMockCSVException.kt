@@ -1,3 +1,3 @@
 package ru.hse.dynamomock.exception
 
-class AWSMockCSVException(message: String) : Exception(message) {}
+class AWSMockCSVException(message: String) : Exception(message)

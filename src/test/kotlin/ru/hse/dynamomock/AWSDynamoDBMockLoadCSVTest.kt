@@ -5,7 +5,6 @@ import assertk.assertions.hasMessage
 import assertk.assertions.isFailure
 import org.junit.jupiter.api.Test
 import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition
-import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement
@@ -79,11 +78,11 @@ internal class AWSDynamoDBMockLoadCSVTest : AWSDynamoDBMockTest() {
         mock.loadCSV(filesLocation + "basic.csv", tableName)
 
         val item = mapOf(
-            "column1" to AttributeValue.builder().s("homecoming").build(),
-            "column3" to AttributeValue.builder().s("2017-07-06").build(),
-            "column2" to AttributeValue.builder().n("1").build(),
-            "column4" to AttributeValue.builder().bool(true).build(),
-            "column5" to AttributeValue.builder().nul(false).build()
+            "column1" to stringAV("homecoming"),
+            "column3" to stringAV("2017-07-06"),
+            "column2" to numAV("1"),
+            "column4" to boolAV(true),
+            "column5" to nulAV(false)
         )
 
         val response = mock.getItem(
@@ -96,11 +95,11 @@ internal class AWSDynamoDBMockLoadCSVTest : AWSDynamoDBMockTest() {
         assertEquals(item, response.item())
 
         val item2 = mapOf(
-            "column1" to AttributeValue.builder().s("far from home").build(),
-            "column3" to AttributeValue.builder().s("2019-07-04").build(),
-            "column2" to AttributeValue.builder().n("2").build(),
-            "column4" to AttributeValue.builder().bool(false).build(),
-            "column5" to AttributeValue.builder().nul(true).build()
+            "column1" to stringAV("far from home"),
+            "column3" to stringAV("2019-07-04"),
+            "column2" to numAV("2"),
+            "column4" to boolAV(false),
+            "column5" to nulAV(true)
         )
 
         val response2 = mock.getItem(
@@ -140,13 +139,9 @@ internal class AWSDynamoDBMockLoadCSVTest : AWSDynamoDBMockTest() {
         mock.loadCSV(filesLocation + "ss-ns-types.csv", tableName)
 
         val item = mapOf(
-            "column1" to AttributeValue.builder().s("captain america").build(),
-            "column2" to AttributeValue.builder()
-                .ss(listOf("the first avenger", "the winter soldier", "civil war"))
-                .build(),
-            "column3" to AttributeValue.builder()
-                .ns(listOf("1", "2", "3"))
-                .build()
+            "column1" to stringAV("captain america"),
+            "column2" to stringListAV(listOf("the first avenger", "the winter soldier", "civil war")),
+            "column3" to numListAV(listOf("1", "2", "3"))
         )
 
         val response = mock.getItem(
@@ -185,24 +180,20 @@ internal class AWSDynamoDBMockLoadCSVTest : AWSDynamoDBMockTest() {
         mock.loadCSV(filesLocation + "l-m-types.csv", tableName)
 
         val item = mapOf(
-            "column1" to AttributeValue.builder().s("something").build(),
-            "column2" to AttributeValue.builder()
-                .l(
-                    listOf(
-                        AttributeValue.builder().s("Cookies").build(),
-                        AttributeValue.builder().s("Coffee").build(),
-                        AttributeValue.builder().n("3.14159").build()
-                    )
+            "column1" to stringAV("something"),
+            "column2" to listAV(
+                listOf(
+                    stringAV("Cookies"),
+                    stringAV("Coffee"),
+                    numAV("3.14159")
                 )
-                .build(),
-            "column3" to AttributeValue.builder()
-                .m(
-                    mapOf(
-                        "Name" to AttributeValue.builder().s("Joe").build(),
-                        "Age" to AttributeValue.builder().n("35").build()
-                    )
+            ),
+            "column3" to mapAV(
+                mapOf(
+                    "Name" to stringAV("Joe"),
+                    "Age" to numAV("35")
                 )
-                .build()
+            )
         )
 
         val response = mock.getItem(
