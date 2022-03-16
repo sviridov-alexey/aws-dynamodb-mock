@@ -36,9 +36,12 @@ class DMLService(
     private val tablesMetadata: MutableMap<String, TableMetadata>
 ) {
 
-    private fun getRequestMetadata(tableName: String, keys: Map<String, AttributeValue>): Pair<Key, Key?> {
-        val tableMetadata = tablesMetadata[tableName] ?: throw ResourceNotFoundException.builder()
+    private fun checkTableExists(tableName: String) =
+        tablesMetadata[tableName] ?: throw ResourceNotFoundException.builder()
             .message("Cannot do operations on a non-existent table").build()
+
+    private fun getRequestMetadata(tableName: String, keys: Map<String, AttributeValue>): Pair<Key, Key?> {
+        val tableMetadata = checkTableExists(tableName)
 
         val partitionKeyName = tableMetadata.partitionKey
         return getKeyFromMetadata(partitionKeyName, keys, tableMetadata.attributeDefinitions) to
@@ -56,8 +59,7 @@ class DMLService(
         }
 
     private fun checkNumOfKeys(tableName: String, keys: Map<String, AttributeValue>) {
-        val tableMetadata = tablesMetadata[tableName] ?: throw ResourceNotFoundException.builder()
-            .message("Cannot do operations on a non-existent table").build()
+        val tableMetadata = checkTableExists(tableName)
         val actualSize = if (tableMetadata.sortKey != null) 2 else 1
         if (keys.size > actualSize) {
             throw dynamoException("The number of conditions on the keys is invalid")
@@ -130,21 +132,28 @@ class DMLService(
         attributeValue: AttributeValue
     ): Map<String, AttributeValue> = mapOf(columnName to attributeValue) + keys
 
-    private fun checkAttributesForDelete(first: AttributeValue, second: AttributeValue): DynamoType {
+    private fun checkAttributes(
+        name: String,
+        allowedTypes: List<DynamoType>,
+        first: AttributeValue,
+        second: AttributeValue? = null
+    ): DynamoType {
         val firstType = checkAttributeValue(first)
-        val secondType = checkAttributeValue(second)
-        if (secondType !in listOf(DynamoType.NS, DynamoType.SS, DynamoType.BS)) {
+        val secondType = if (second != null) checkAttributeValue(second) else firstType
+        if (secondType !in allowedTypes) {
             val errorString =
-                "One or more parameter values were invalid: DELETE action with value is not supported for the type " +
+                "One or more parameter values were invalid: $name action with value is not supported for the type " +
                     when (secondType) {
                         DynamoType.N -> "NUMBER"
                         DynamoType.S -> "STRING"
                         DynamoType.B -> "BINARY"
+                        DynamoType.NS -> "NUMBER SET"
+                        DynamoType.SS -> "STRING SET"
+                        DynamoType.BS -> "BINARY SET"
                         DynamoType.BOOL -> "BOOLEAN"
                         DynamoType.NULL -> "NULL"
                         DynamoType.L -> "LIST"
                         DynamoType.M -> "MAP"
-                        else -> ""
                     }
             throw dynamoException(errorString)
         }
@@ -153,7 +162,6 @@ class DMLService(
         }
         return secondType
     }
-
 
     private fun putInUpdate(
         tableName: String, partitionKey: Key, sortKey: Key?,
@@ -194,7 +202,12 @@ class DMLService(
         } else {
             val previousItemAttribute = previousItem[columnName]
             if (previousItemAttribute != null) {
-                val setType = checkAttributesForDelete(previousItemAttribute, av.value())
+                val setType = checkAttributes(
+                    "DELETE",
+                    listOf(DynamoType.NS, DynamoType.SS, DynamoType.BS),
+                    previousItemAttribute,
+                    av.value(),
+                )
                 val newItem = previousItem.toMutableMap()
                 val diffSet = when (setType) {
                     DynamoType.SS -> {
@@ -244,29 +257,6 @@ class DMLService(
         }
     }
 
-    private fun checkAttributesForAdd(first: AttributeValue, second: AttributeValue): DynamoType {
-        val firstType = checkAttributeValue(first)
-        val secondType = checkAttributeValue(second)
-        if (secondType !in listOf(DynamoType.N, DynamoType.NS, DynamoType.SS, DynamoType.BS)) {
-            val errorString =
-                "One or more parameter values were invalid: ADD action with value is not supported for the type " +
-                    when (secondType) {
-                        DynamoType.S -> "STRING"
-                        DynamoType.B -> "BINARY"
-                        DynamoType.BOOL -> "BOOLEAN"
-                        DynamoType.NULL -> "NULL"
-                        DynamoType.L -> "LIST"
-                        DynamoType.M -> "MAP"
-                        else -> ""
-                    }
-            throw dynamoException(errorString)
-        }
-        if (firstType != secondType) {
-            throw dynamoException("Type mismatch for attribute to update")
-        }
-        return secondType
-    }
-
     private fun addInUpdate(
         tableName: String, partitionKey: Key, sortKey: Key?,
         columnName: String, av: AttributeValueUpdate, keys: Map<String, AttributeValue>
@@ -275,14 +265,18 @@ class DMLService(
             it.name to it.type.toAttributeValue()
         }
         if (previousItem == null) {
-            // todo: ADD - Causes DynamoDB to create an item with the supplied primary key and number (or set of numbers)
-            // for the attribute value. The only data types allowed are Number and Number Set.
+            checkAttributes("ADD", listOf(DynamoType.N, DynamoType.NS), av.value())
             val itemsList = itemToAttributeInfo(buildItem(keys, columnName, av.value()))
             storage.putItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
         } else {
             val previousItemAttribute = previousItem[columnName]
             if (previousItemAttribute != null) {
-                val attrType = checkAttributesForAdd(previousItemAttribute, av.value())
+                val attrType = checkAttributes(
+                    "ADD",
+                    listOf(DynamoType.N, DynamoType.NS, DynamoType.SS, DynamoType.BS),
+                    previousItemAttribute,
+                    av.value()
+                )
                 val newItem = previousItem.toMutableMap()
                 when (attrType) {
                     DynamoType.SS -> {
@@ -314,7 +308,11 @@ class DMLService(
                 val itemsList = itemToAttributeInfo(newItem)
                 storage.updateItem(DBPutItemRequest(tableName, partitionKey, sortKey, itemsList))
             } else {
-                checkAttributesForAdd(av.value(), av.value())
+                checkAttributes(
+                    "ADD",
+                    listOf(DynamoType.N, DynamoType.NS, DynamoType.SS, DynamoType.BS),
+                    av.value()
+                )
                 val newItem = previousItem.toMutableMap()
                 newItem[columnName] = av.value()
                 val itemsList = itemToAttributeInfo(newItem)
@@ -324,11 +322,12 @@ class DMLService(
     }
 
     fun updateItem(request: UpdateItemRequest): UpdateItemResponse {
-        // todo: if attribute is key in index then check type
         val tableName = request.tableName()
         val key = request.key()
         checkNumOfKeys(tableName, key)
         val (partitionKey, sortKey) = getRequestMetadata(tableName, key)
+
+        val lsi = checkTableExists(tableName).localSecondaryIndexes
 
         val attributeValues = request.attributeUpdates()
         attributeValues.forEach { (columnName, av) ->
@@ -336,6 +335,14 @@ class DMLService(
                 throw dynamoException(
                     "One or more parameter values were invalid: Cannot update attribute ${columnName}." +
                         "This attribute is part of the key"
+                )
+            }
+
+            if (lsi.containsKey(columnName)) {
+                // todo: check the message in dynamo
+                throw dynamoException(
+                    "One or more parameter values were invalid: Cannot update attribute ${columnName}." +
+                        "This attribute is part of the locan secondary index"
                 )
             }
             if (av.action() == AttributeAction.PUT) {
@@ -361,8 +368,7 @@ class DMLService(
         val deleteItemRequests = mutableListOf<DBDeleteItemRequest>()
 
         requestItems.keys.forEach {
-            tablesMetadata[it] ?: throw ResourceNotFoundException.builder()
-                .message("Cannot do operations on a non-existent table").build()
+            checkTableExists(it)
         }
 
         val batchSize = requestItems.entries.sumOf { it.value.size }
@@ -429,5 +435,4 @@ class DMLService(
         return BatchWriteItemResponse.builder()
             .build()
     }
-
 }
