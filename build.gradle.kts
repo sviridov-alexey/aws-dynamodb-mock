@@ -7,8 +7,9 @@ val exposedVersion: String by project
 val kotlinCsvVersion: String by project
 val kotlinxSerializationVersion: String by project
 
+
 plugins {
-    kotlin("jvm") version "1.5.31"
+    kotlin("jvm") version "1.6.21"
     kotlin("plugin.serialization") version "1.5.30"
     `maven-publish`
 }
@@ -33,6 +34,8 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.7.0")
     testImplementation("org.jetbrains.kotlin:kotlin-test-testng:1.5.21")
     testImplementation("com.willowtreeapps.assertk:assertk-jvm:0.25")
+    testImplementation("org.testcontainers:testcontainers:1.16.3")
+    testImplementation("org.testcontainers:junit-jupiter:1.16.3")
 }
 
 tasks.test {

@@ -3,7 +3,9 @@ package ru.hse.dynamomock
 import assertk.assertThat
 import assertk.assertions.hasMessage
 import assertk.assertions.isFailure
+import org.junit.Before
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -19,6 +21,7 @@ import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest
 import software.amazon.awssdk.services.dynamodb.model.DeleteRequest
 import software.amazon.awssdk.services.dynamodb.model.DynamoDbException
 import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement
+import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughput
 import software.amazon.awssdk.services.dynamodb.model.PutRequest
 
 import software.amazon.awssdk.services.dynamodb.model.ReturnValue
@@ -91,7 +94,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         "column10" to stringAV("87654")
     )
 
-    private fun createTable(name: String) {
+    private fun makeCreateTableRequest(name: String): CreateTableRequest {
         val attributeDefinitions = listOf<AttributeDefinition>(
             AttributeDefinition.builder()
                 .attributeName(partitionKeyName)
@@ -102,9 +105,10 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
                 .attributeType("N")
                 .build()
         )
-        val createTableRequest = CreateTableRequest.builder()
+        return CreateTableRequest.builder()
             .tableName(name)
             .attributeDefinitions(attributeDefinitions)
+            .provisionedThroughput(ProvisionedThroughput.builder().readCapacityUnits(10).writeCapacityUnits(5).build())
             .keySchema(
                 listOf(
                     KeySchemaElement.builder()
@@ -118,12 +122,21 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
                 )
             )
             .build()
-        mock.createTable(createTableRequest)
+    }
+
+    @Before
+    fun createTableForDynamo() {
+        client.createTable(makeCreateTableRequest(tableName))
     }
 
     @BeforeEach
     fun createTable() {
-        createTable(tableName)
+        mock.createTable(makeCreateTableRequest(tableName))
+    }
+
+    private fun createTable(name: String) {
+        mock.createTable(makeCreateTableRequest(name))
+        client.createTable(makeCreateTableRequest(name))
     }
 
     @ParameterizedTest

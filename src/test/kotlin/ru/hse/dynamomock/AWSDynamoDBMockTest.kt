@@ -1,9 +1,18 @@
 package ru.hse.dynamomock
 
+import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
+import org.testcontainers.containers.GenericContainer
+import org.testcontainers.junit.jupiter.Container
+import org.testcontainers.junit.jupiter.Testcontainers
 import ru.hse.dynamomock.model.TableMetadata
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.core.SdkBytes
+import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.*
+import java.net.URI
 import java.time.Instant
 
 fun boolAV(
@@ -66,9 +75,11 @@ fun mapAV(
     .m(m)
     .build()
 
+@Testcontainers
 internal open class AWSDynamoDBMockTest {
     protected lateinit var mock: AWSDynamoDBMock
         private set
+    protected lateinit var client: DynamoDbClient
 
     @BeforeEach
     fun init() {
@@ -78,9 +89,24 @@ internal open class AWSDynamoDBMockTest {
         mock = AWSDynamoDBMock()
     }
 
+    @BeforeEach
+    fun initDynamo() {
+        val endpointUrl = java.lang.String.format("http://localhost:%d", dynamoDb.firstMappedPort)
+        client = DynamoDbClient.builder()
+            .endpointOverride(URI.create(endpointUrl)) // The region is meaningless for local DynamoDb but required for client builder validation
+            .region(Region.EU_CENTRAL_1)
+            .credentialsProvider(
+                StaticCredentialsProvider.create(
+                    AwsBasicCredentials.create("dummy-key", "dummy-secret")
+                )
+            )
+            .build()
+    }
+
     protected fun TableMetadata.toCreateTableRequest(): CreateTableRequest = CreateTableRequest.builder()
         .tableName(tableName)
         .attributeDefinitions(attributeDefinitions)
+        .provisionedThroughput(ProvisionedThroughput.builder().readCapacityUnits(10).writeCapacityUnits(5).build())
         .keySchema(
             listOfNotNull(
                 KeySchemaElement.builder().attributeName(partitionKey).keyType(KeyType.HASH).build(),
@@ -213,5 +239,11 @@ internal open class AWSDynamoDBMockTest {
                 createTableMetadata("TEST_M_$i", i, i, Instant.ofEpochMilli(9472938474 * i + 2))
             )
         }
+
+        @Container
+        val dynamoDb = GenericContainer("amazon/dynamodb-local:1.13.2")
+            .withCommand("-jar DynamoDBLocal.jar -inMemory -sharedDb")
+            .withExposedPorts(8000)
     }
+
 }
