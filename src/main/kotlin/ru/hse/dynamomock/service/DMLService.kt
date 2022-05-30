@@ -40,6 +40,14 @@ class DMLService(
         tablesMetadata[tableName] ?: throw ResourceNotFoundException.builder()
             .message("Cannot do operations on a non-existent table").build()
 
+    private fun checkItem(item: Map<String, AttributeValue>) {
+        item.values.forEach {
+            if (it.bs().toList().size != it.bs().toSet().size) {
+                throw dynamoException("Input collection of type BS contains duplicates.")
+            }
+        }
+    }
+
     private fun getRequestMetadata(tableName: String, keys: Map<String, AttributeValue>): Pair<Key, Key?> {
         val tableMetadata = checkTableExists(tableName)
 
@@ -66,8 +74,15 @@ class DMLService(
         }
     }
 
+    private fun checkAttributesToGet(attributesToGet: List<String>) {
+        dynamoRequires(attributesToGet.distinct().size == attributesToGet.size) {
+            "Cannot have two attributes with the same name"
+        }
+    }
+
     fun putItem(request: PutItemRequest): PutItemResponse {
         val tableName = request.tableName()
+        checkItem(request.item())
         // check num of keys?????
         val (partitionKey, sortKey) = getRequestMetadata(tableName, request.item())
 
@@ -93,6 +108,8 @@ class DMLService(
     fun getItem(request: GetItemRequest): GetItemResponse {
         val tableName = request.tableName()
         checkNumOfKeys(tableName, request.key())
+        checkAttributesToGet(request.attributesToGet())
+
         val (partitionKey, sortKey) = getRequestMetadata(tableName, request.key())
 
         val response = storage.getItem(DBGetItemRequest(tableName, partitionKey, sortKey))
@@ -142,7 +159,8 @@ class DMLService(
         val secondType = if (second != null) checkAttributeValue(second) else firstType
         if (secondType !in allowedTypes) {
             val errorString =
-                "One or more parameter values were invalid: $name action with value is not supported for the type " +
+                "One or more parameter values were invalid: $name action " +
+                    "${if (secondType == DynamoType.N) "with value " else ""}is not supported for the type " +
                     when (secondType) {
                         DynamoType.N -> "NUMBER"
                         DynamoType.S -> "STRING"
@@ -212,7 +230,7 @@ class DMLService(
                 val diffSet = when (setType) {
                     DynamoType.SS -> {
                         dynamoRequires(av.value().ss().isNotEmpty()) {
-                            "One or more parameter values were invalid: An string set may not be empty"
+                            "One or more parameter values were invalid: An string set  may not be empty"
                         }
                         val diffSet = previousItemAttribute.ss() - av.value().ss()
                         newItem[columnName] = AttributeValue.builder()
@@ -222,7 +240,7 @@ class DMLService(
                     }
                     DynamoType.NS -> {
                         dynamoRequires(av.value().ns().isNotEmpty()) {
-                            "One or more parameter values were invalid: An number set may not be empty"
+                            "One or more parameter values were invalid: An number set  may not be empty"
                         }
                         val diffSet = previousItemAttribute.ns() - av.value().ns()
                         newItem[columnName] = AttributeValue.builder()
@@ -232,7 +250,7 @@ class DMLService(
                     }
                     else -> {
                         dynamoRequires(av.value().bs().isNotEmpty()) {
-                            "One or more parameter values were invalid: An binary set may not be empty"
+                            "One or more parameter values were invalid: An binary set  may not be empty"
                         }
                         val diffSet = previousItemAttribute.bs() - av.value().bs()
                         newItem[columnName] = AttributeValue.builder()
@@ -334,7 +352,7 @@ class DMLService(
             if (key.containsKey(columnName)) {
                 throw dynamoException(
                     "One or more parameter values were invalid: Cannot update attribute ${columnName}." +
-                        "This attribute is part of the key"
+                        " This attribute is part of the key"
                 )
             }
 
@@ -342,7 +360,7 @@ class DMLService(
                 // todo: check the message in dynamo
                 throw dynamoException(
                     "One or more parameter values were invalid: Cannot update attribute ${columnName}." +
-                        "This attribute is part of the locan secondary index"
+                        " This attribute is part of the locan secondary index"
                 )
             }
             if (av.action() == AttributeAction.PUT) {

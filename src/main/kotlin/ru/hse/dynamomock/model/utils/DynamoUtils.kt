@@ -20,7 +20,7 @@ fun toKey(keyName: String, attributeValue: AttributeValue): Pair<DynamoType, Key
     } else if (attributeValue.b() != null) {
         DynamoType.B to StringKey(keyName, Base64.getEncoder().encodeToString(attributeValue.b().asByteArray()))
     } else {
-        throw dynamoException("Member must satisfy enum value set: [B, N, S]")
+        throw dynamoException("Invalid attribute value type")
     }
 
 fun getKeyFromMetadata(
@@ -33,7 +33,7 @@ fun getKeyFromMetadata(
     val expectedKeyType = attributeDefinitions.firstOrNull { it.attributeName() == keyName }
         ?: throw dynamoException("One of the required keys was not given a value")
     dynamoRequires(expectedKeyType.attributeTypeAsString().uppercase() == keyType.name) {
-        "Invalid attribute value type"
+        "One or more parameter values were invalid: Type mismatch for key"
     }
     return key
 }
