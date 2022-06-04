@@ -44,14 +44,18 @@ fun CreateTableRequest.toTableMetadata(): TableMetadata {
     )
 }
 
+fun TableDescription.compareDescription(snd: TableDescription): Boolean =
+    this.tableName() == snd.tableName() && this.attributeDefinitions() == snd.attributeDefinitions() &&
+        this.keySchema() == snd.keySchema() && this.tableStatus() == snd.tableStatus() &&
+        this.localSecondaryIndexes() == snd.localSecondaryIndexes()
 
 private val KeySchemaElement.isPartition get(): Boolean = keyType() == KeyType.HASH
 private val KeySchemaElement.isSort get(): Boolean = keyType() == KeyType.RANGE
 
-private fun getPartitionKey(keySchema: List<KeySchemaElement>) =
+fun getPartitionKey(keySchema: List<KeySchemaElement>): String =
     keySchema.first { it.isPartition }.attributeName()
 
-private fun getSortKey(keySchema: List<KeySchemaElement>) =
+fun getSortKey(keySchema: List<KeySchemaElement>): String? =
     keySchema.firstOrNull { it.isSort }?.attributeName()
 
 private fun checkLocalSecondaryIndexes(
@@ -60,8 +64,8 @@ private fun checkLocalSecondaryIndexes(
     attributeDefinitions: List<AttributeDefinition>
 ): Map<String, LocalSecondaryIndex> {
     if (indexes.isEmpty()) {
-        dynamoRequires (tableKeys.size == attributeDefinitions.size) {
-            "The number of attributes in key schema must match the number of attributes defined in attribute definitions."
+        dynamoRequires(tableKeys.size == attributeDefinitions.size) {
+            "The number of attributes in key schema must match the number of attributesdefined in attribute definitions."
         }
         return emptyMap()
     }
@@ -81,14 +85,11 @@ private fun checkLocalSecondaryIndexes(
     indexes.forEach {
         val name = it.indexName()
         dynamoRequires(!indexesMap.contains(name)) {
-            "Two local secondary indices have the same name"
+            "Two local secondary indicies have the same name"
         }
 
         dynamoRequires(name != null && name.length in 3..255 && name.matches(checkIndexName)) {
-            """
-                Invalid table/index name.  Table/index names must be between 3 and 255 characters long, 
-                and may contain only the characters a-z, A-Z, 0-9, '_', '-', and '.'
-            """.trimIndent()
+            "Invalid table/index name.  Table/index names must be between 3 and 255 characters long, and may contain only the characters a-z, A-Z, 0-9, '_', '-', and '.'"
         }
 
         dynamoRequires(it.projection() != null && it.projection().projectionType() != null) {
@@ -111,14 +112,13 @@ private fun checkLocalSecondaryIndexes(
             throw dynamoException(
                 "Local Secondary indices must have the same hash key as the main table"
             )
-
         }
         keySchemaElements.addAll(it.keySchema())
         indexesMap[name] = it
     }
 
-    dynamoRequires (keySchemaElements.size == attributeDefinitions.size) {
-        "The number of attributes in key schema must match the number of attributes defined in attribute definitions."
+    dynamoRequires(keySchemaElements.size == attributeDefinitions.size) {
+        "The number of attributes in key schema must match the number of attributesdefined in attribute definitions."
     }
 
     return indexesMap
@@ -132,16 +132,20 @@ private fun checkKeySchema(keySchema: List<KeySchemaElement>) {
     val filteredSchema = keySchema.filter { it.isPartition }
 
     dynamoRequires(filteredSchema.isNotEmpty()) {
-        "No Hash Key specified in schema. All Dynamo DB tables must have exactly one hash key"
+        "No Hash Key specified in schema.  All Dynamo DB tables must have exactly one hash key"
     }
 
     dynamoRequires(filteredSchema.size <= 1) {
-        "Too many hash keys specified. All Dynamo DB tables must have exactly one hash key"
+        "Too many hash keys specified.  All Dynamo DB tables must have exactly one hash key"
     }
 
     if (keySchema.size == 2) {
         dynamoRequires(keySchema[0].isPartition && keySchema[1].isSort) {
-            "Invalid key order. Hash Key must be specified first in key schema, Range Key must be specifed second"
+            "Invalid key order.  Hash Key must be specified first in key schema, Range Key must be specifed second"
+        }
+
+        dynamoRequires(keySchema[0].attributeName() != keySchema[1].attributeName()) {
+            "Two keys can not have the same name"
         }
     }
 }
@@ -155,4 +159,4 @@ private fun toLSIndexDescription(index: LocalSecondaryIndex) =
         .keySchema(index.keySchema())
         .projection(index.projection())
         // TODO: more parameters
-    .build()
+        .build()

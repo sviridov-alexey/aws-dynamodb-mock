@@ -24,6 +24,7 @@ import software.amazon.awssdk.services.dynamodb.model.DynamoDbException
 import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement
 import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughput
 import software.amazon.awssdk.services.dynamodb.model.PutRequest
+import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException
 
 import software.amazon.awssdk.services.dynamodb.model.ReturnValue
 import software.amazon.awssdk.services.dynamodb.model.WriteRequest
@@ -308,11 +309,17 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
         assertThat {
             mock.putItem(putItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(DynamoDbException::class)
+            messageContains(errorMessage)
+        }
 
         assertThat {
             client.putItem(putItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(DynamoDbException::class)
+            messageContains(errorMessage)
+        }
     }
 
     @Test
@@ -328,11 +335,17 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
         assertThat {
             mock.putItem(putItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(DynamoDbException::class)
+            messageContains(errorMessage)
+        }
 
         assertThat {
             client.putItem(putItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(DynamoDbException::class)
+            messageContains(errorMessage)
+        }
     }
 
     @Test
@@ -348,11 +361,17 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
         assertThat {
             mock.putItem(putItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(DynamoDbException::class)
+            messageContains(errorMessage)
+        }
 
         assertThat {
             client.putItem(putItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(DynamoDbException::class)
+            messageContains(errorMessage)
+        }
     }
 
     @Test
@@ -367,11 +386,17 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
         assertThat {
             mock.getItem(getItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(DynamoDbException::class)
+            messageContains(errorMessage)
+        }
 
         assertThat {
             client.getItem(getItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(DynamoDbException::class)
+            messageContains(errorMessage)
+        }
     }
 
     @Test
@@ -387,11 +412,17 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
         assertThat {
             mock.putItem(putItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(DynamoDbException::class)
+            messageContains(errorMessage)
+        }
 
         assertThat {
             client.putItem(putItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(DynamoDbException::class)
+            messageContains(errorMessage)
+        }
     }
 
     @Test
@@ -407,10 +438,16 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
         assertThat {
             mock.putItem(putItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(ResourceNotFoundException::class)
+            messageContains(errorMessage)
+        }
         assertThat {
             client.putItem(putItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(ResourceNotFoundException::class)
+            messageContains(errorMessage)
+        }
     }
 
     @Test
@@ -485,10 +522,16 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
         assertThat {
             mock.batchWriteItem(batchWriteItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(ResourceNotFoundException::class)
+            messageContains(errorMessage)
+        }
         assertThat {
             client.batchWriteItem(batchWriteItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(ResourceNotFoundException::class)
+            messageContains(errorMessage)
+        }
     }
 
     @Test
@@ -557,11 +600,17 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
         assertThat {
             mock.batchWriteItem(batchWriteItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(DynamoDbException::class)
+            messageContains(errorMessage)
+        }
 
         assertThat {
             client.batchWriteItem(batchWriteItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(DynamoDbException::class)
+            messageContains(errorMessage)
+        }
     }
 
     @ParameterizedTest
@@ -593,11 +642,17 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
         assertThat {
             mock.batchWriteItem(batchWriteItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(DynamoDbException::class)
+            messageContains(errorMessage)
+        }
 
         assertThat {
             client.batchWriteItem(batchWriteItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(DynamoDbException::class)
+            messageContains(errorMessage)
+        }
     }
 
     @Test
@@ -633,10 +688,16 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
         assertThat {
             mock.batchWriteItem(batchWriteItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(DynamoDbException::class)
+            messageContains(errorMessage)
+        }
         assertThat {
             client.batchWriteItem(batchWriteItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(DynamoDbException::class)
+            messageContains(errorMessage)
+        }
     }
 
     @Test
@@ -694,11 +755,17 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
         assertThat {
             mock.batchWriteItem(batchWriteItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(DynamoDbException::class)
+            messageContains(errorMessage)
+        }
 
         assertThat {
             client.batchWriteItem(batchWriteItemRequest)
-        }.isFailure().messageContains(errorMessage)
+        }.isFailure().all {
+            hasClass(DynamoDbException::class)
+            messageContains(errorMessage)
+        }
     }
 
     @Test

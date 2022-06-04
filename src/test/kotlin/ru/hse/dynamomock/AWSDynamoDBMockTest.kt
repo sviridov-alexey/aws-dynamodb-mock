@@ -1,6 +1,5 @@
 package ru.hse.dynamomock
 
-import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.junit.jupiter.Container
@@ -113,7 +112,7 @@ internal open class AWSDynamoDBMockTest {
                 sortKey?.let { KeySchemaElement.builder().attributeName(it).keyType(KeyType.RANGE).build() }
             )
         )
-        .localSecondaryIndexes(localSecondaryIndexes.values)
+        .localSecondaryIndexes(if (localSecondaryIndexes.isEmpty()) null else localSecondaryIndexes.values)
         .build()
 
     protected fun TableMetadata.toDeleteTableRequest(): DeleteTableRequest = DeleteTableRequest.builder()
@@ -182,7 +181,6 @@ internal open class AWSDynamoDBMockTest {
         item.entries.filter { i -> i.key == AWSDynamoDBMockDMLTest.partitionKeyName || i.key == AWSDynamoDBMockDMLTest.sortKeyName }
             .associate { it.key to it.value }
 
-
     companion object {
         @JvmStatic
         protected val attributeDefinitionPool = listOf(
@@ -200,7 +198,7 @@ internal open class AWSDynamoDBMockTest {
             AttributeDefinition.builder().attributeName("mIsHa").attributeType("B").build(),
             AttributeDefinition.builder().attributeName("hehehe17").attributeType("B").build(),
             AttributeDefinition.builder().attributeName("saveMe").attributeType("B").build(),
-            AttributeDefinition.builder().attributeName(List(100){ 'a' }.joinToString("")).attributeType("S").build()
+            AttributeDefinition.builder().attributeName(List(100) { 'a' }.joinToString("")).attributeType("S").build()
         )
 
         @JvmStatic
@@ -226,7 +224,7 @@ internal open class AWSDynamoDBMockTest {
         protected val metadataPool = listOf(
             createTableMetadata("metadata_First1", 8, 1, Instant.ofEpochMilli(2103102401234)),
             createTableMetadata("otHerMeta__data", 13, null, Instant.ofEpochMilli(11111)),
-            createTableMetadata("kek_lol239_kek", 5, 5, Instant.now()),
+            createTableMetadata("kek_lol239_kek", 5, 7, Instant.now()),
             createTableMetadata("wow_wow_WoW", 9, null, Instant.now()),
             createTableMetadata("save_me._.pls", 2, null, Instant.ofEpochMilli(432534634)),
             createTableMetadata("ANOTHER.._AAAA", 1, 11, Instant.now()),
@@ -236,7 +234,6 @@ internal open class AWSDynamoDBMockTest {
         ) + attributeDefinitionPool.indices.flatMap { i ->
             listOf(
                 createTableMetadata("TEST_N_$i", i, null, Instant.ofEpochMilli(123241424222 * i)),
-                createTableMetadata("TEST_M_$i", i, i, Instant.ofEpochMilli(9472938474 * i + 2))
             )
         }
 
@@ -245,5 +242,4 @@ internal open class AWSDynamoDBMockTest {
             .withCommand("-jar DynamoDBLocal.jar -inMemory -sharedDb")
             .withExposedPorts(8000)
     }
-
 }
