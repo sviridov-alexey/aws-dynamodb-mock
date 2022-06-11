@@ -1,6 +1,7 @@
 package ru.hse.dynamomock.service
 
 import ru.hse.dynamomock.db.DataStorageLayer
+import ru.hse.dynamomock.exception.dynamoException
 import ru.hse.dynamomock.exception.dynamoRequires
 import ru.hse.dynamomock.model.TableMetadata
 import ru.hse.dynamomock.model.query.SelectRequest
@@ -40,7 +41,8 @@ class SelectService(
 
         val table = tablesMetadata.getValue(tableName)
         val index = indexName?.let { table.localSecondaryIndex(it) }
-        val keyConditions = retrieveKeyConditions()?.also { keyConditions ->
+        val (keyConditions, usedKeyExpr) = retrieveKeyConditions()
+        keyConditions?.also { keyConditions ->
             keyConditions[table.partitionKey].let {
                 dynamoRequires(it != null && it.comparisonOperator() == ComparisonOperator.EQ) {
                     "Partition key must use '=' operator."
@@ -76,7 +78,11 @@ class SelectService(
             limit?.let { items.take(it) } ?: items
         }
 
-        val filterExpression = retrieveFilterExpression()
+        val (filterExpression, usedFilterExpr) = retrieveFilterExpression()
+        // TODO: fix message
+        if ((usedFilterExpr + usedKeyExpr).size != expressionAttributeValues.size) {
+            throw dynamoException("Value provided in ExpressionAttributeValues unused in expressions:")
+        }
         val filteredItems = filterExpression?.let {
             items.filter {
                 val withoutKeys = it.toMutableMap().apply {

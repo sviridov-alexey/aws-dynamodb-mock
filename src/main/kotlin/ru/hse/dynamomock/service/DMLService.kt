@@ -41,9 +41,13 @@ class DMLService(
             .message("Cannot do operations on a non-existent table").build()
 
     private fun checkItem(item: Map<String, AttributeValue>) {
-        item.values.forEach {
-            if (it.bs().toList().size != it.bs().toSet().size) {
+        item.entries.forEach {
+            if (it.value.bs().toList().size != it.value.bs().toSet().size) {
                 throw dynamoException("Input collection of type BS contains duplicates.")
+            }
+            // TODO: extend set: https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ReservedWords.html
+            dynamoRequires(it.key.lowercase() !in setOf("first", "second", "map", "other")) {
+                "Attribute name is a reserved keyword; reserved keyword: ${it.key}"
             }
         }
     }

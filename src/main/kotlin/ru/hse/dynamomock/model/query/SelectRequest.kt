@@ -28,13 +28,14 @@ data class SelectRequest(
     val consistentRead: Boolean?,
     val hasKeyConditions: Boolean
 ) {
-    fun retrieveFilterExpression(): ConditionExpression? {
+    fun retrieveFilterExpression(): Pair<ConditionExpression?, Set<String>> {
         return if (filter != null) {
-            retrieveConditionExpression(conditionalOperator ?: ConditionalOperator.AND)
+            retrieveConditionExpression(conditionalOperator ?: ConditionalOperator.AND) to emptySet()
         } else if (filterExpression != null) {
-            ConditionExpressionGrammar(expressionAttributeNames, expressionAttributeValues).parse(filterExpression)
+            val grammar = ConditionExpressionGrammar(expressionAttributeNames, expressionAttributeValues)
+            grammar.parse(filterExpression) to grammar.getUsedExpressionAttributes()
         } else {
-            null
+            null to emptySet()
         }
     }
 
@@ -52,12 +53,13 @@ data class SelectRequest(
         }
     }
 
-    fun retrieveKeyConditions(): Map<String, Condition>? {
+    fun retrieveKeyConditions(): Pair<Map<String, Condition>?, Set<String>> {
         if (!hasKeyConditions) {
             check(keyConditions == null && keyConditionExpression == null)
-            return null
+            return null to emptySet()
         }
-        return keyConditions ?: run {
+        return if (keyConditions != null) keyConditions to emptySet()
+        else {
             if (keyConditionExpression == null) {
                 throw dynamoException("Nor key conditions, nor key condition expression was provided.")
             }
@@ -66,8 +68,11 @@ data class SelectRequest(
                 is ConditionExpression.And -> mapOf(
                     conditionExpression.left.toKeyCondition(),
                     conditionExpression.right.toKeyCondition()
-                )
-                else -> mapOf(conditionExpression.toKeyCondition())
+                ) to expressionGrammar.getUsedExpressionAttributes()
+                else -> {
+                    val used = expressionGrammar.getUsedExpressionAttributes()
+                    mapOf(conditionExpression.toKeyCondition()) to used
+                }
             }
         }
     }

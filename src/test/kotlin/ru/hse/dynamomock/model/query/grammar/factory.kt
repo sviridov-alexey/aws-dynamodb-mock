@@ -1,5 +1,6 @@
 package ru.hse.dynamomock.model.query.grammar
 
+import ru.hse.dynamomock.exception.dynamoException
 import ru.hse.dynamomock.model.query.QueryAttribute
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 
@@ -15,7 +16,12 @@ internal fun lv(attribute: QueryAttribute.Simple, index: Int) = QueryAttribute.S
 
 internal fun atS(value: String) = AttributeValue.builder().s(value).build()
 
-internal fun atN(value: String) = AttributeValue.builder().n(value).build()
+private fun isNumeric(toCheck: String): Boolean {
+    return toCheck.toDoubleOrNull() != null
+}
+internal fun atN(value: String) = if (isNumeric(value))
+    AttributeValue.builder().n(value).build() else
+    throw dynamoException("A value provided cannot be converted into a number $value")
 
 internal fun atSS(vararg values: String) = AttributeValue.builder().ss(*values).build()
 

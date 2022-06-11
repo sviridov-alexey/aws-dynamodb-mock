@@ -11,6 +11,7 @@ import ru.hse.dynamomock.parser.combinators.separated
 import ru.hse.dynamomock.parser.lexer.LiteralToken
 import ru.hse.dynamomock.parser.lexer.RegexToken
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
+import software.amazon.awssdk.services.dynamodb.model.ResourceInUseException
 
 internal class ConditionExpressionGrammar(
     expressionAttributeNames: Map<String, String>,
@@ -56,19 +57,23 @@ internal class ConditionExpressionGrammar(
         -name * -lp * mayParens(arg1) * -comma * mayParens(arg2) * -rp
 
     private val size by function1(sizeKw, attributeGrammar.parser) map { Parameter.AttributeSize(it) }
-    private val value by valueT map { Parameter.Value(expressionAttributeValues.getValue(it.text)) }
+    private val value by valueT map {
+        Parameter.Value(
+            expressionAttributeValues[it.text] ?: throw ResourceInUseException.builder().build()
+        ).apply { usedExpressionAttributeValues.add(it.text) }
+    }
     private val operand by mayParens(attribute or value or size)
 
     private val conditionOp by (eq or neq or le or lt or gt or ge) map { it.text }
     private val condition by operand * conditionOp * operand map { (rest, right) ->
         val (left, op) = rest
         when (op) {
-            "="  -> ConditionExpression.Eq(left, right)
+            "=" -> ConditionExpression.Eq(left, right)
             "<>" -> ConditionExpression.Neq(left, right)
             "<=" -> ConditionExpression.Le(left, right)
-            "<"  -> ConditionExpression.Lt(left, right)
+            "<" -> ConditionExpression.Lt(left, right)
             ">=" -> ConditionExpression.Ge(left, right)
-            ">"  -> ConditionExpression.Gt(left, right)
+            ">" -> ConditionExpression.Gt(left, right)
             else -> throw IllegalStateException("Unexpected operator in primary expression.")
         }
     }
@@ -96,10 +101,10 @@ internal class ConditionExpressionGrammar(
     }
 
     private val function by betweenF or inF or attributeExistsF or attributeNotExistsF or
-            attributeTypeF or beginsWithF or containsF
+        attributeTypeF or beginsWithF or containsF
 
     private val primary: OrdinaryParser<ConditionExpression> by condition or function or
-            (-lp * ref(this::parser) * -rp) or (-notKw * ref(this::primary) map { ConditionExpression.Not(it) })
+        (-lp * ref(this::parser) * -rp) or (-notKw * ref(this::primary) map { ConditionExpression.Not(it) })
 
     private val ands by leftAssociated(primary, andKw) { l, r, _ -> ConditionExpression.And(l, r) }
 
