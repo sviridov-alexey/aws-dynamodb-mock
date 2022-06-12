@@ -178,7 +178,7 @@ internal open class AWSDynamoDBMockTest {
         partKeyName: String,
         sortKeyName: String? = null
     ) =
-        item.entries.filter { i -> i.key == AWSDynamoDBMockDMLTest.partitionKeyName || i.key == AWSDynamoDBMockDMLTest.sortKeyName }
+        item.entries.filter { i -> i.key == partKeyName || (sortKeyName != null && i.key == sortKeyName) }
             .associate { it.key to it.value }
 
     companion object {
