@@ -13,66 +13,67 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.*
 import java.net.URI
 import java.time.Instant
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 
-fun boolAV(
-    b: Boolean
-): AttributeValue = AttributeValue.builder()
-    .bool(b)
+fun Boolean.asDynamoBoolValue(): AttributeValue = AttributeValue.builder()
+    .bool(this)
     .build()
 
-fun stringAV(
-    s: String
-): AttributeValue = AttributeValue.builder()
-    .s(s)
+fun String.asDynamoStringValue(): AttributeValue = AttributeValue.builder()
+    .s(this)
     .build()
 
-fun numAV(
-    n: String
-): AttributeValue = AttributeValue.builder()
-    .n(n)
+fun String.asDynamoNumValue(): AttributeValue = AttributeValue.builder()
+    .n(this)
     .build()
 
-fun binaryAV(
-    b: SdkBytes
-): AttributeValue = AttributeValue.builder()
-    .b(b)
+fun SdkBytes.asDynamoValue(): AttributeValue = AttributeValue.builder()
+    .b(this)
     .build()
 
-fun nulAV(
-    nul: Boolean
-): AttributeValue = AttributeValue.builder()
-    .nul(nul)
+fun Boolean.asDynamoNulValue(): AttributeValue = AttributeValue.builder()
+    .nul(this)
     .build()
 
-fun stringListAV(
-    ss: List<String>
-): AttributeValue = AttributeValue.builder()
-    .ss(ss)
+fun List<String>.asDynamoStrListValue(): AttributeValue = AttributeValue.builder()
+    .ss(this)
     .build()
 
-fun numListAV(
-    ns: List<String>
-): AttributeValue = AttributeValue.builder()
-    .ns(ns)
+fun List<String>.asDynamoNumListValue(): AttributeValue = AttributeValue.builder()
+    .ns(this)
     .build()
 
-fun binaryListAV(
-    bs: List<SdkBytes>
-): AttributeValue = AttributeValue.builder()
-    .bs(bs)
+fun List<SdkBytes>.asDynamoValue(): AttributeValue = AttributeValue.builder()
+    .bs(this)
     .build()
 
-fun listAV(
-    l: Collection<AttributeValue>
-): AttributeValue = AttributeValue.builder()
-    .l(l)
+fun Collection<AttributeValue>.asDynamoValue(): AttributeValue = AttributeValue.builder()
+    .l(this)
     .build()
 
-fun mapAV(
-    m: Map<String, AttributeValue>
-): AttributeValue = AttributeValue.builder()
-    .m(m)
+fun Map<String, AttributeValue>.asDynamoValue(): AttributeValue = AttributeValue.builder()
+    .m(this)
     .build()
+
+fun compareItems(item1: Map<String, AttributeValue>, item2: Map<String, AttributeValue>) {
+    assertEquals(item1.size, item2.size)
+    item1.entries.forEach {
+        val v1 = it.value
+        val v2 = item2[it.key]
+        assertNotNull(v2)
+        assertEquals(v1.s(), v2.s())
+        assertEquals(v1.n(), v2.n())
+        assertEquals(v1.b(), v2.b())
+        assertEquals(v1.ss().toMutableList().sorted(), v2.ss().toMutableList().sorted())
+        assertEquals(v1.ns().toMutableList().sorted(), v2.ns().toMutableList().sorted())
+        assertEquals(v1.bs(), v2.bs())
+        assertEquals(v1.l(), v2.l())
+        assertEquals(v1.m(), v2.m())
+        assertEquals(v1.nul(), v2.nul())
+        assertEquals(v1.bool(), v2.bool())
+    }
+}
 
 @Testcontainers
 internal open class AWSDynamoDBMockTest {

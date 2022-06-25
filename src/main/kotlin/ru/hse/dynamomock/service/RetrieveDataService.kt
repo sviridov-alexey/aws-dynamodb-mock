@@ -17,7 +17,7 @@ import software.amazon.awssdk.services.dynamodb.model.ScanRequest
 import software.amazon.awssdk.services.dynamodb.model.ScanResponse
 import software.amazon.awssdk.services.dynamodb.model.Select
 
-class SelectService(
+class RetrieveDataService(
     private val storage: DataStorageLayer,
     private val tablesMetadata: MutableMap<String, TableMetadata>
 ) {

@@ -6,8 +6,9 @@ import ru.hse.dynamomock.db.ExposedStorage
 import ru.hse.dynamomock.model.TableMetadata
 import ru.hse.dynamomock.service.AWSDynamoDBMockService
 import ru.hse.dynamomock.service.DDLService
-import ru.hse.dynamomock.service.DMLService
-import ru.hse.dynamomock.service.SelectService
+import ru.hse.dynamomock.service.ImportExportService
+import ru.hse.dynamomock.service.ModifyDataService
+import ru.hse.dynamomock.service.RetrieveDataService
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.*
@@ -21,10 +22,11 @@ class AWSDynamoDBMock : DynamoDbClient {
         val storage = ExposedStorage()
         val tablesMetadata = mutableMapOf<String, TableMetadata>()
         val ddlService = DDLService(storage, tablesMetadata)
-        val dmlService = DMLService(storage, tablesMetadata)
-        val selectService = SelectService(storage, tablesMetadata)
+        val modifyDataService = ModifyDataService(storage, tablesMetadata)
+        val retrieveDataService = RetrieveDataService(storage, tablesMetadata)
+        val importExportService = ImportExportService(modifyDataService)
         service = AWSDynamoDBMockService(
-            storage, ddlService, dmlService, selectService
+            storage, ddlService, modifyDataService, retrieveDataService, importExportService
         )
     }
 
@@ -65,7 +67,8 @@ class AWSDynamoDBMock : DynamoDbClient {
 
     override fun updateItem(updateItemRequest: UpdateItemRequest) = service.updateItem(updateItemRequest)
 
-    override fun batchWriteItem(batchWriteItemRequest: BatchWriteItemRequest) = service.batchWriteItem(batchWriteItemRequest)
+    override fun batchWriteItem(batchWriteItemRequest: BatchWriteItemRequest) =
+        service.batchWriteItem(batchWriteItemRequest)
 
     fun loadCSV(fileName: String, tableName: String) = service.loadCSV(fileName, tableName)
 

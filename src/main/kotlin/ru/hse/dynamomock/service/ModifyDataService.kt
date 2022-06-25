@@ -11,10 +11,6 @@ import ru.hse.dynamomock.model.DynamoType
 import ru.hse.dynamomock.model.Key
 import ru.hse.dynamomock.model.TableMetadata
 import ru.hse.dynamomock.model.toAttributeTypeInfo
-import ru.hse.dynamomock.model.utils.checkAttributeValue
-import ru.hse.dynamomock.model.utils.getKeyFromMetadata
-import ru.hse.dynamomock.model.utils.getSortKeyFromMetadata
-import ru.hse.dynamomock.model.utils.itemToAttributeInfo
 import software.amazon.awssdk.services.dynamodb.model.AttributeAction
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.AttributeValueUpdate
@@ -31,7 +27,7 @@ import software.amazon.awssdk.services.dynamodb.model.ReturnValue
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemResponse
 
-class DMLService(
+class ModifyDataService(
     private val storage: DataStorageLayer,
     private val tablesMetadata: MutableMap<String, TableMetadata>
 ) {
@@ -46,7 +42,7 @@ class DMLService(
                 throw dynamoException("Input collection of type BS contains duplicates.")
             }
             // TODO: extend set: https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ReservedWords.html
-            dynamoRequires(it.key.lowercase() !in setOf("first", "second", "map", "other")) {
+            dynamoRequires(it.key.lowercase() !in setOf("first", "second", "map", "other", "set", "list")) {
                 "Attribute name is a reserved keyword; reserved keyword: ${it.key}"
             }
         }

@@ -30,7 +30,6 @@ import software.amazon.awssdk.services.dynamodb.model.ReturnValue
 import software.amazon.awssdk.services.dynamodb.model.WriteRequest
 import kotlin.random.Random
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 
 internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
 
@@ -40,23 +39,23 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         const val tableName = "testTable"
 
         val item1 = mapOf(
-            partitionKeyName to stringAV("value1"),
-            sortKeyName to numAV("1"),
-            "column2" to numAV("123.367")
+            partitionKeyName to "value1".asDynamoStringValue(),
+            sortKeyName to "1".asDynamoNumValue(),
+            "column2" to "123.367".asDynamoNumValue()
         )
 
         val item2 = mapOf(
-            partitionKeyName to stringAV("key2"),
-            sortKeyName to numAV("2"),
-            "column3" to stringAV("i am string"),
-            "column4" to stringListAV(listOf("we", "are", "strings"))
+            partitionKeyName to "key2".asDynamoStringValue(),
+            sortKeyName to "2".asDynamoNumValue(),
+            "column3" to "i am string".asDynamoStringValue(),
+            "column4" to listOf("we", "are", "strings").asDynamoStrListValue()
         )
 
         val item3 = mapOf(
-            partitionKeyName to stringAV("ssssnake"),
-            sortKeyName to numAV("30"),
-            "column5" to stringAV("not number 5"),
-            "column4" to numListAV(listOf("67", "2", "0.5"))
+            partitionKeyName to "ssssnake".asDynamoStringValue(),
+            sortKeyName to "30".asDynamoNumValue(),
+            "column5" to "not number 5".asDynamoStringValue(),
+            "column4" to listOf("67", "2", "0.5").asDynamoNumListValue()
         )
 
         @JvmStatic
@@ -64,9 +63,9 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             val arr = ByteArray(20)
             val b = SdkBytes.fromByteArray(Random.nextBytes(arr))
             val mapAttributeValue = mapOf(
-                "kuku" to stringAV("ha"),
-                "hseee" to stringAV(":)"),
-                "scary" to numAV("666")
+                "kuku" to "ha".asDynamoStringValue(),
+                "hseee" to ":)".asDynamoStringValue(),
+                "scary" to "666".asDynamoNumValue()
             )
 
             return listOf(
@@ -75,15 +74,15 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
                 Arguments.of(item3),
                 Arguments.of(
                     mapOf(
-                        partitionKeyName to stringAV("key2"),
-                        sortKeyName to numAV("2"),
-                        "column3" to binaryAV(b),
-                        "column4" to binaryListAV(listOf(b)),
-                        "column5" to boolAV(true),
-                        "column6" to nulAV(true),
-                        "listColumn" to listAV(mapAttributeValue.values),
-                        "mapColumn" to mapAV(mapAttributeValue),
-                        "ns" to numListAV(listOf("100", "101")),
+                        partitionKeyName to "key2".asDynamoStringValue(),
+                        sortKeyName to "2".asDynamoNumValue(),
+                        "column3" to b.asDynamoValue(),
+                        "column4" to listOf(b).asDynamoValue(),
+                        "column5" to true.asDynamoBoolValue(),
+                        "column6" to true.asDynamoNulValue(),
+                        "listColumn" to mapAttributeValue.values.asDynamoValue(),
+                        "mapColumn" to mapAttributeValue.asDynamoValue(),
+                        "ns" to listOf("100", "101").asDynamoNumListValue(),
                     )
                 )
             )
@@ -91,10 +90,10 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     }
 
     private val defaultItem = mutableMapOf(
-        partitionKeyName to stringAV("value1"),
-        sortKeyName to numAV("1"),
-        "column3" to stringAV("i am string"),
-        "column10" to stringAV("87654")
+        partitionKeyName to "value1".asDynamoStringValue(),
+        sortKeyName to "1".asDynamoNumValue(),
+        "column3" to "i am string".asDynamoStringValue(),
+        "column10" to "87654".asDynamoStringValue()
     )
 
     private fun makeCreateTableRequest(name: String): CreateTableRequest {
@@ -145,25 +144,6 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     private fun createTable(name: String) {
         mock.createTable(makeCreateTableRequest(name))
         client.createTable(makeCreateTableRequest(name))
-    }
-
-    private fun compareItems(item1: Map<String, AttributeValue>, item2: Map<String, AttributeValue>) {
-        assertEquals(item1.size, item2.size)
-        item1.entries.forEach {
-            val v1 = it.value
-            val v2 = item2[it.key]
-            assertNotNull(v2)
-            assertEquals(v1.s(), v2.s())
-            assertEquals(v1.n(), v2.n())
-            assertEquals(v1.b(), v2.b())
-            assertEquals(v1.ss().toMutableList().sorted(), v2.ss().toMutableList().sorted())
-            assertEquals(v1.ns().toMutableList().sorted(), v2.ns().toMutableList().sorted())
-            assertEquals(v1.bs(), v2.bs())
-            assertEquals(v1.l(), v2.l())
-            assertEquals(v1.m(), v2.m())
-            assertEquals(v1.nul(), v2.nul())
-            assertEquals(v1.bool(), v2.bool())
-        }
     }
 
     @ParameterizedTest
@@ -325,10 +305,10 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @Test
     fun `test wrong key name`() {
         val item = mapOf(
-            partitionKeyName + "1" to stringAV("key2"),
-            sortKeyName to numAV("2"),
-            "column3" to stringAV("i am string"),
-            "column4" to stringListAV(listOf("we", "are", "strings"))
+            partitionKeyName + "1" to "key2".asDynamoStringValue(),
+            sortKeyName to "2".asDynamoNumValue(),
+            "column3" to "i am string".asDynamoStringValue(),
+            "column4" to listOf("we", "are", "strings").asDynamoStrListValue()
         )
         val putItemRequest = putItemRequestBuilder(tableName, item)
         val errorMessage = "One of the required keys was not given a value"
@@ -351,10 +331,10 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @Test
     fun `test wrong key type`() {
         val item = mapOf(
-            partitionKeyName to numAV("1234"),
-            sortKeyName to numAV("2"),
-            "column3" to stringAV("i am string"),
-            "column4" to stringListAV(listOf("we", "are", "strings"))
+            partitionKeyName to "1234".asDynamoNumValue(),
+            sortKeyName to "2".asDynamoNumValue(),
+            "column3" to "i am string".asDynamoStringValue(),
+            "column4" to listOf("we", "are", "strings").asDynamoStrListValue()
         )
         val putItemRequest = putItemRequestBuilder(tableName, item)
         val errorMessage = "One or more parameter values were invalid: Type mismatch for key"
@@ -377,9 +357,9 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @Test
     fun `test more keys than it should be`() {
         val item = mapOf(
-            partitionKeyName to stringAV("key2"),
-            sortKeyName to numAV("2"),
-            "column3" to stringAV("i am string"),
+            partitionKeyName to "key2".asDynamoStringValue(),
+            sortKeyName to "2".asDynamoNumValue(),
+            "column3" to "i am string".asDynamoStringValue(),
         )
         val getItemRequest = getItemRequestBuilder(tableName, item.keys.toList(), item)
         val errorMessage = "The number of conditions on the keys is invalid"
@@ -402,10 +382,10 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @Test
     fun `test key type not from b, n, s`() {
         val item = mapOf(
-            partitionKeyName to stringListAV(listOf("key2")),
-            sortKeyName to numAV("2"),
-            "column3" to stringAV("i am string"),
-            "column4" to stringListAV(listOf("we", "are", "strings"))
+            partitionKeyName to listOf("key2").asDynamoStrListValue(),
+            sortKeyName to "2".asDynamoNumValue(),
+            "column3" to "i am string".asDynamoStringValue(),
+            "column4" to listOf("we", "are", "strings").asDynamoStrListValue()
         )
         val putItemRequest = putItemRequestBuilder(tableName, item)
         val errorMessage = "Invalid attribute value type"
@@ -428,10 +408,10 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @Test
     fun `test wrong table name`() {
         val item = mapOf(
-            partitionKeyName to stringAV("key2"),
-            sortKeyName to numAV("2"),
-            "column3" to stringAV("i am string"),
-            "column4" to stringListAV(listOf("we", "are", "strings"))
+            partitionKeyName to "key2".asDynamoStringValue(),
+            sortKeyName to "2".asDynamoNumValue(),
+            "column3" to "i am string".asDynamoStringValue(),
+            "column4" to listOf("we", "are", "strings").asDynamoStrListValue()
         )
         val putItemRequest = putItemRequestBuilder("wrongTableName", item)
         val errorMessage = "Cannot do operations on a non-existent table"
@@ -453,13 +433,13 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @Test
     fun `test different sort keys`() {
         val item = mapOf(
-            partitionKeyName to stringAV("key2"),
-            sortKeyName to numAV("2"),
-            "column3" to stringAV("i am string")
+            partitionKeyName to "key2".asDynamoStringValue(),
+            sortKeyName to "2".asDynamoNumValue(),
+            "column3" to "i am string".asDynamoStringValue()
         )
         val newKeys = mapOf(
-            partitionKeyName to stringAV("key2"),
-            sortKeyName to numAV("3")
+            partitionKeyName to "key2".asDynamoStringValue(),
+            sortKeyName to "3".asDynamoNumValue()
         )
 
         val putItemRequest = putItemRequestBuilder(tableName, item)
@@ -477,13 +457,13 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @Test
     fun `test different partition keys`() {
         val item = mapOf(
-            partitionKeyName to stringAV("key2"),
-            sortKeyName to numAV("2"),
-            "column3" to stringAV("i am string")
+            partitionKeyName to "key2".asDynamoStringValue(),
+            sortKeyName to "2".asDynamoNumValue(),
+            "column3" to "i am string".asDynamoStringValue()
         )
         val newKeys = mapOf(
-            partitionKeyName to stringAV("different key"),
-            sortKeyName to numAV("2")
+            partitionKeyName to "different key".asDynamoStringValue(),
+            sortKeyName to "2".asDynamoNumValue()
         )
 
         val putItemRequest = putItemRequestBuilder(tableName, item)
@@ -662,9 +642,9 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         for (i in 0..25) {
             str.plus("1")
             val item: Map<String, AttributeValue> = mapOf(
-                partitionKeyName to stringAV(str),
-                sortKeyName to numAV("123.3667"),
-                "column4" to stringAV("column4")
+                partitionKeyName to str.asDynamoStringValue(),
+                sortKeyName to "123.3667".asDynamoNumValue(),
+                "column4" to "column4".asDynamoStringValue()
             )
             itemsList.add(
                 WriteRequest.builder()
@@ -707,9 +687,9 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         for (i in 0..13) {
             str += "1"
             val item: Map<String, AttributeValue> = mapOf(
-                partitionKeyName to stringAV(str),
-                sortKeyName to numAV("123.3667"),
-                "column4" to stringAV("column4")
+                partitionKeyName to str.asDynamoStringValue(),
+                sortKeyName to "123.3667".asDynamoNumValue(),
+                "column4" to "column4".asDynamoStringValue()
             )
             itemsList.add(
                 WriteRequest.builder()
@@ -728,8 +708,8 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         for (i in 0..12) {
             str2 += "1"
             val item: Map<String, AttributeValue> = mapOf(
-                partitionKeyName to stringAV(str2),
-                sortKeyName to numAV("123.3667"),
+                partitionKeyName to str2.asDynamoStringValue(),
+                sortKeyName to "123.3667".asDynamoNumValue(),
             )
             itemsList2.add(
                 WriteRequest.builder()
@@ -928,7 +908,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         val updateItemRequest = updateItemRequestBuilder(
             tableName, keys, mapOf(
                 "column3" to attributeValueUpdateBuilder(
-                    AttributeAction.PUT, stringAV("hehe")
+                    AttributeAction.PUT, "hehe".asDynamoStringValue()
                 )
             )
         )
@@ -939,7 +919,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         val mockResponse = mock.getItem(getItemRequest)
         val dynamoResponse = client.getItem(getItemRequest)
 
-        defaultItem["column3"] = stringAV("hehe")
+        defaultItem["column3"] = "hehe".asDynamoStringValue()
         assertEquals(defaultItem, mockResponse.item())
         compareItems(defaultItem, dynamoResponse.item())
     }
@@ -957,7 +937,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             tableName, keys,
             mapOf(
                 partitionKeyName to attributeValueUpdateBuilder(
-                    AttributeAction.PUT, stringAV("hehe")
+                    AttributeAction.PUT, "hehe".asDynamoStringValue()
                 )
             )
         )
@@ -1001,7 +981,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             tableName, keys,
             mapOf(
                 partitionKeyName to attributeValueUpdateBuilder(
-                    AttributeAction.ADD, stringAV("hehe")
+                    AttributeAction.ADD, "hehe".asDynamoStringValue()
                 )
             )
         )
@@ -1032,7 +1012,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         val updateItemRequest = updateItemRequestBuilder(
             tableName, keys, mapOf(
                 name to attributeValueUpdateBuilder(
-                    AttributeAction.PUT, stringAV(value)
+                    AttributeAction.PUT, value.asDynamoStringValue()
                 )
             )
         )
@@ -1043,7 +1023,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         val mockResponse = mock.getItem(getItemRequest)
         val dynamoResponse = client.getItem(getItemRequest)
 
-        defaultItem[name] = stringAV(value)
+        defaultItem[name] = value.asDynamoStringValue()
         assertEquals(defaultItem, mockResponse.item())
         compareItems(defaultItem, dynamoResponse.item())
     }
@@ -1058,7 +1038,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         val updateItemRequest = updateItemRequestBuilder(
             tableName, item, mapOf(
                 name to attributeValueUpdateBuilder(
-                    AttributeAction.PUT, stringAV(value)
+                    AttributeAction.PUT, value.asDynamoStringValue()
                 )
             )
         )
@@ -1069,7 +1049,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         val mockResponse = mock.getItem(getItemRequest)
         val dynamoResponse = client.getItem(getItemRequest)
 
-        item[name] = stringAV(value)
+        item[name] = value.asDynamoStringValue()
         assertEquals(item, mockResponse.item())
         compareItems(item, dynamoResponse.item())
     }
@@ -1104,7 +1084,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @Test
     fun `updateItem delete from set`() {
         val name = "coolSet"
-        defaultItem[name] = stringListAV(listOf("a", "b", "c"))
+        defaultItem[name] = listOf("a", "b", "c").asDynamoStrListValue()
 
         val putItemRequest = putItemRequestBuilder(tableName, defaultItem)
         mock.putItem(putItemRequest)
@@ -1116,7 +1096,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             tableName, keys, mapOf(
                 name to attributeValueUpdateBuilder(
                     AttributeAction.DELETE,
-                    stringListAV(listOf("a", "c"))
+                    listOf("a", "c").asDynamoStrListValue()
                 )
             )
         )
@@ -1127,7 +1107,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         val mockResponse = mock.getItem(getItemRequest)
         val dynamoResponse = client.getItem(getItemRequest)
 
-        defaultItem[name] = stringListAV(listOf("b"))
+        defaultItem[name] = listOf("b").asDynamoStrListValue()
         assertEquals(defaultItem, mockResponse.item())
         compareItems(defaultItem, dynamoResponse.item())
     }
@@ -1135,7 +1115,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @Test
     fun `updateItem delete from set (specifying an empty set is an error)`() {
         val name = "coolSet"
-        defaultItem[name] = stringListAV(listOf("a", "b", "c"))
+        defaultItem[name] = listOf("a", "b", "c").asDynamoStrListValue()
         val putItemRequest = putItemRequestBuilder(tableName, defaultItem)
         mock.putItem(putItemRequest)
         client.putItem(putItemRequest)
@@ -1145,7 +1125,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             tableName, keys, mapOf(
                 name to attributeValueUpdateBuilder(
                     AttributeAction.DELETE,
-                    stringListAV(listOf())
+                    listOf<String>().asDynamoStrListValue()
                 )
             )
         )
@@ -1206,7 +1186,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
     @Test
     fun `updateItem add to set`() {
         val name = "coolSet"
-        defaultItem["coolSet"] = numListAV(listOf("1", "2"))
+        defaultItem["coolSet"] = listOf("1", "2").asDynamoNumListValue()
 
         val putItemRequest = putItemRequestBuilder(tableName, defaultItem)
         mock.putItem(putItemRequest)
@@ -1218,7 +1198,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
             tableName, keys, mapOf(
                 name to attributeValueUpdateBuilder(
                     AttributeAction.ADD,
-                    numListAV(listOf("3"))
+                    listOf("3").asDynamoNumListValue()
                 )
             )
         )
@@ -1229,7 +1209,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         val mockResponse = mock.getItem(getItemRequest)
         val dynamoResponse = client.getItem(getItemRequest)
 
-        defaultItem[name] = numListAV(listOf("1", "2", "3"))
+        defaultItem[name] = listOf("1", "2", "3").asDynamoNumListValue()
 
         assertEquals(defaultItem, mockResponse.item())
         compareItems(defaultItem, dynamoResponse.item())
@@ -1248,7 +1228,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         val updateItemRequest = updateItemRequestBuilder(
             tableName, keys, mapOf(
                 name to attributeValueUpdateBuilder(
-                    AttributeAction.ADD, numAV(value)
+                    AttributeAction.ADD, value.asDynamoNumValue()
                 )
             )
         )
@@ -1259,7 +1239,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         val mockResponse = mock.getItem(getItemRequest)
         val dynamoResponse = client.getItem(getItemRequest)
 
-        defaultItem[name] = numAV(value)
+        defaultItem[name] = value.asDynamoNumValue()
         assertEquals(defaultItem, mockResponse.item())
         compareItems(defaultItem, dynamoResponse.item())
     }
@@ -1277,7 +1257,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         val updateItemRequest = updateItemRequestBuilder(
             tableName, keys, mapOf(
                 name to attributeValueUpdateBuilder(
-                    AttributeAction.ADD, stringAV(value)
+                    AttributeAction.ADD, value.asDynamoStringValue()
                 )
             )
         )
@@ -1313,7 +1293,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         val updateItemRequest = updateItemRequestBuilder(
             tableName, keys, mapOf(
                 name to attributeValueUpdateBuilder(
-                    AttributeAction.ADD, numAV("70")
+                    AttributeAction.ADD, "70".asDynamoNumValue()
                 )
             )
         )
@@ -1324,7 +1304,7 @@ internal class AWSDynamoDBMockDMLTest : AWSDynamoDBMockTest() {
         val mockResponse = mock.getItem(getItemRequest)
         val dynamoResponse = client.getItem(getItemRequest)
 
-        defaultItem[name] = numAV("100")
+        defaultItem[name] = "100".asDynamoNumValue()
         assertEquals(defaultItem, mockResponse.item())
         compareItems(defaultItem, dynamoResponse.item())
     }

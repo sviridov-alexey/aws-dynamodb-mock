@@ -43,7 +43,8 @@ internal class AWSDynamoDBMockSelectTest : AWSDynamoDBMockTest() {
                 sortKeyType?.let {
                     AttributeDefinition.builder().attributeType(it.toString()).attributeName(sortKey).build()
                 }
-            ) + localSecondaryIndexes.map { (index, type) ->
+            )
+                + localSecondaryIndexes.map { (index, type) ->
                 AttributeDefinition.builder().attributeType(type.toString()).attributeName(index.sortKey).build()
             },
             partitionKey = partKey,
@@ -56,8 +57,9 @@ internal class AWSDynamoDBMockSelectTest : AWSDynamoDBMockTest() {
         private fun prepare() {
             val metadata = buildMetadata()
             val createTableRequest = metadata.toCreateTableRequest()
-            mock.createTable(createTableRequest)
             client.createTable(createTableRequest)
+            mock.createTable(createTableRequest)
+
             items.forEach {
                 val putItemRequest = putItemRequestBuilder(tableName, it)
                 mock.putItem(putItemRequest)
@@ -84,7 +86,7 @@ internal class AWSDynamoDBMockSelectTest : AWSDynamoDBMockTest() {
             }
             client.query(query).apply {
                 assertNotNull(items())
-                //  assertNotNull(lastEvaluatedKey())
+                assertNotNull(lastEvaluatedKey())
                 // expected.assert(toSelectResponse())
             }
             clear()
@@ -104,7 +106,7 @@ internal class AWSDynamoDBMockSelectTest : AWSDynamoDBMockTest() {
         fun localSecondaryIndex(
             attributeName: String,
             projectionType: ProjectionType,
-            nonKeyAttributes: List<String>,
+            nonKeyAttributes: List<String>?,
             indexName: String = defaultLsiName,
         ): LocalSecondaryIndex = LocalSecondaryIndex
             .builder()
@@ -142,6 +144,9 @@ internal class AWSDynamoDBMockSelectTest : AWSDynamoDBMockTest() {
             } else {
                 assertEquals(items.toSet(), response.items.toSet())
             }
+            // items.zip(response.items) { a, b ->
+            //     compareItems(a, b)
+            // }
             assertNotNull(response.lastEvaluatedKey)
         }
     }
@@ -456,7 +461,7 @@ internal class AWSDynamoDBMockSelectTest : AWSDynamoDBMockTest() {
         expected = ExpectedItems(items = listOf(items[2]), scannedCount = 3)
         testQuery()
 
-        values.put(":s", atS("S"))
+        values[":s"] = atS("S")
         query = query(
             tableName = tableName,
             keyConditionExpression = "$partKey = :v",
@@ -583,14 +588,14 @@ internal class AWSDynamoDBMockSelectTest : AWSDynamoDBMockTest() {
                 partKey to atN("-10"),
                 sortKey to atN("1"),
                 "one" to atS("what"),
-                "list" to atSS("one", "two"),
+                "list1" to atSS("one", "two"),
                 "val" to atN("73")
             ),
             mapOf(
                 partKey to atN("-10"),
                 sortKey to atN("2"),
                 "one1" to atN("10"),
-                "list" to atSS("two", "three"),
+                "list1" to atSS("two", "three"),
                 "val" to atN("37")
             )
         )
@@ -622,7 +627,7 @@ internal class AWSDynamoDBMockSelectTest : AWSDynamoDBMockTest() {
         query = query(
             tableName = tableName,
             keyConditions = mapOf(partKey to condition(listOf(atN("-10")), EQ)),
-            queryFilter = mapOf("list" to condition(listOf(atS("two")), CONTAINS))
+            queryFilter = mapOf("list1" to condition(listOf(atS("two")), CONTAINS))
         )
         expected = ExpectedItems(items = listOf(items[0], items[1]), scannedCount = 2)
         testQuery()
@@ -636,37 +641,36 @@ internal class AWSDynamoDBMockSelectTest : AWSDynamoDBMockTest() {
         testQuery()
     }
 
-    // TODO: Invalid FilterExpression: Syntax error; token: "set", near: "= set"
-    // @Test
-    // fun `test filter expression complex`() = testQuery {
-    //     partKeyType = AttributeType.S
-    //     sortKeyType = AttributeType.N
-    //     items = listOf(
-    //         mapOf(partKey to atS("seven"), sortKey to atN("1"), "one" to atN("10"), "two" to atS("seven")),
-    //         mapOf(partKey to atS("seven"), sortKey to atN("2"), "list" to atL(atN("10"), atS("-10"), atSS("kek"))),
-    //         mapOf(partKey to atS("seven"), sortKey to atN("3"), "set" to atNS("2", "1")),
-    //         mapOf(partKey to atS("seven"), sortKey to atN("4"), "list" to atL(atS("10"), atN("-10"), atSS("kek"))),
-    //         mapOf(partKey to atS("seven"), sortKey to atN("5"), "set" to atNS("1", "2", "3")),
-    //         mapOf(partKey to atS("seven"), sortKey to atN("6"), "set" to atSS("1", "2")),
-    //         mapOf(partKey to atS("seven"), sortKey to atN("7"), "one" to atN("5"), "two" to atS("seven")),
-    //         mapOf(partKey to atS("seven"), sortKey to atN("9"), "one" to atN("10"), "two" to atS("Seven")),
-    //         mapOf(partKey to atS("Seven"), sortKey to atN("10"), "one" to atN("10"), "two" to atS("seven"))
-    //     )
-    //     query = query(
-    //         tableName = tableName,
-    //         keyConditionExpression = "$partKey = :v",
-    //         filterExpression = ":v in (one, two, :t, not_) and :a between :b and one or not not :c <> list or :s = set",
-    //         expressionAttributeValues = mapOf(
-    //             ":v" to atS("seven"),
-    //             ":t" to atN("10000000"),
-    //             ":a" to atN("7"),
-    //             ":b" to atN("-7"),
-    //             ":s" to atNS("1", "2"),
-    //             ":c" to atL(atS("10"), atN("-10"), atSS("kek"))
-    //         )
-    //     )
-    //     expected = ExpectedItems(items = listOf(items[0], items[1], items[2]), scannedCount = 8)
-    // }
+    @Test
+    fun `test filter expression complex`() = testQuery {
+        partKeyType = AttributeType.S
+        sortKeyType = AttributeType.N
+        items = listOf(
+            mapOf(partKey to atS("seven"), sortKey to atN("1"), "one" to atN("10"), "two" to atS("seven")),
+            mapOf(partKey to atS("seven"), sortKey to atN("2"), "list1" to atL(atN("10"), atS("-10"), atSS("kek"))),
+            mapOf(partKey to atS("seven"), sortKey to atN("3"), "set1" to atNS("2", "1")),
+            mapOf(partKey to atS("seven"), sortKey to atN("4"), "list1" to atL(atS("10"), atN("-10"), atSS("kek"))),
+            mapOf(partKey to atS("seven"), sortKey to atN("5"), "set1" to atNS("1", "2", "3")),
+            mapOf(partKey to atS("seven"), sortKey to atN("6"), "set1" to atSS("1", "2")),
+            mapOf(partKey to atS("seven"), sortKey to atN("7"), "one" to atN("5"), "two" to atS("seven")),
+            mapOf(partKey to atS("seven"), sortKey to atN("9"), "one" to atN("10"), "two" to atS("Seven")),
+            mapOf(partKey to atS("Seven"), sortKey to atN("10"), "one" to atN("10"), "two" to atS("seven"))
+        )
+        query = query(
+            tableName = tableName,
+            keyConditionExpression = "$partKey = :v",
+            filterExpression = ":v in (one, two, :t, not_) and :a between :b and one or not not :c <> list1 or :s = set1",
+            expressionAttributeValues = mapOf(
+                ":v" to atS("seven"),
+                ":t" to atN("10000000"),
+                ":a" to atN("7"),
+                ":b" to atN("-7"),
+                ":s" to atNS("1", "2"),
+                ":c" to atL(atS("10"), atN("-10"), atSS("kek"))
+            )
+        )
+        expected = ExpectedItems(items = listOf(items[0], items[1], items[2]), scannedCount = 8)
+    }
 
     @Test
     fun `test filter expression nested attributes`() = testQuery(autoRun = false) {
@@ -982,62 +986,61 @@ internal class AWSDynamoDBMockSelectTest : AWSDynamoDBMockTest() {
         assertEquals(expectedItems, result)
     }
 
-    // TODO: No attributes should be specified to be projected unless projection type is INCLUDE
-    // @Test
-    // fun `test local secondary indexes with sort key`() = testQuery(autoRun = false) {
-    //     partKeyType = AttributeType.S
-    //     sortKeyType = AttributeType.N
-    //     val index = "ind"
-    //     localSecondaryIndexes = listOf(
-    //         localSecondaryIndex(index, ProjectionType.KEYS_ONLY, emptyList()) to AttributeType.S
-    //     )
-    //     items = listOf(
-    //         mapOf(partKey to atS("wow"), sortKey to atN("11"), index to atS("what"), "a" to atN("1")),
-    //         mapOf(partKey to atS("wow"), sortKey to atN("10"), index to atS("no"), "b" to atS("a")),
-    //         mapOf(partKey to atS("wow"), sortKey to atN("-1"), index to atS("what"), "c" to atSS("a", "b")),
-    //         mapOf(partKey to atS("No wow"), sortKey to atN("4"), index to atS("what")),
-    //         mapOf(partKey to atS("no wow"), sortKey to atN("5"))
-    //     )
-    //     query = query(
-    //         tableName = tableName,
-    //         indexName = defaultLsiName,
-    //         keyConditionExpression = "$partKey = :val and $index = :other",
-    //         expressionAttributeValues = mapOf(":val" to atS("wow"), ":other" to atS("what"))
-    //     )
-    //     expected = ExpectedItems(
-    //         items = listOf(items[0], items[2]).map { item ->
-    //             item.filterKeys { it in listOf(partKey, sortKey, index) }
-    //         },
-    //         scannedCount = 2,
-    //         ignoreOrder = true
-    //     )
-    //     testQuery()
-    //
-    //     localSecondaryIndexes = listOf(
-    //         localSecondaryIndex(index, ProjectionType.ALL, emptyList()) to AttributeType.S
-    //     )
-    //     expected = ExpectedItems(items = listOf(items[0], items[2]), scannedCount = 2, ignoreOrder = true)
-    //     testQuery()
-    //
-    //     localSecondaryIndexes = listOf(
-    //         localSecondaryIndex(index, ProjectionType.INCLUDE, listOf("a")) to AttributeType.S
-    //     )
-    //     expected = ExpectedItems(
-    //         items = listOf(items[0], items[2]).map { item ->
-    //             item.filterKeys { it in listOf(partKey, sortKey, index, "a") }
-    //         },
-    //         scannedCount = 2,
-    //         ignoreOrder = true
-    //     )
-    //     testQuery()
-    //
-    //     localSecondaryIndexes = listOf(
-    //         localSecondaryIndex(index, ProjectionType.KEYS_ONLY, emptyList()) to AttributeType.S
-    //     )
-    //     query = query.toBuilder().select(Select.ALL_ATTRIBUTES).build()
-    //     expected = ExpectedItems(items = listOf(items[0], items[2]), scannedCount = 2, ignoreOrder = true)
-    //     testQuery()
-    // }
+    @Test
+    fun `test local secondary indexes with sort key`() = testQuery(autoRun = false) {
+        partKeyType = AttributeType.S
+        sortKeyType = AttributeType.N
+        val index = "ind"
+        localSecondaryIndexes = listOf(
+            localSecondaryIndex(index, ProjectionType.KEYS_ONLY, null) to AttributeType.S
+        )
+        items = listOf(
+            mapOf(partKey to atS("wow"), sortKey to atN("11"), index to atS("what"), "a" to atN("1")),
+            mapOf(partKey to atS("wow"), sortKey to atN("10"), index to atS("no"), "b" to atS("a")),
+            mapOf(partKey to atS("wow"), sortKey to atN("-1"), index to atS("what"), "c" to atSS("a", "b")),
+            mapOf(partKey to atS("No wow"), sortKey to atN("4"), index to atS("what")),
+            mapOf(partKey to atS("no wow"), sortKey to atN("5"))
+        )
+        query = query(
+            tableName = tableName,
+            indexName = defaultLsiName,
+            keyConditionExpression = "$partKey = :val and $index = :other",
+            expressionAttributeValues = mapOf(":val" to atS("wow"), ":other" to atS("what"))
+        )
+        expected = ExpectedItems(
+            items = listOf(items[0], items[2]).map { item ->
+                item.filterKeys { it in listOf(partKey, sortKey, index) }
+            },
+            scannedCount = 2,
+            ignoreOrder = true
+        )
+        testQuery()
+
+        localSecondaryIndexes = listOf(
+            localSecondaryIndex(index, ProjectionType.ALL, null) to AttributeType.S
+        )
+        expected = ExpectedItems(items = listOf(items[0], items[2]), scannedCount = 2, ignoreOrder = true)
+        testQuery()
+
+        localSecondaryIndexes = listOf(
+            localSecondaryIndex(index, ProjectionType.INCLUDE, listOf("a")) to AttributeType.S
+        )
+        expected = ExpectedItems(
+            items = listOf(items[0], items[2]).map { item ->
+                item.filterKeys { it in listOf(partKey, sortKey, index, "a") }
+            },
+            scannedCount = 2,
+            ignoreOrder = true
+        )
+        testQuery()
+
+        localSecondaryIndexes = listOf(
+            localSecondaryIndex(index, ProjectionType.KEYS_ONLY, null) to AttributeType.S
+        )
+        query = query.toBuilder().select(Select.ALL_ATTRIBUTES).build()
+        expected = ExpectedItems(items = listOf(items[0], items[2]), scannedCount = 2, ignoreOrder = true)
+        testQuery()
+    }
 
     @Test
     fun `test local secondary indexes without sort key`() {
@@ -1164,7 +1167,10 @@ internal class AWSDynamoDBMockSelectTest : AWSDynamoDBMockTest() {
         queryFailed<DynamoDbException> {
             query = query(
                 tableName = tableName,
-                keyConditions = mapOf(partKey to condition(listOf(atS("a")), EQ), "a" to condition(listOf(atS("a")), EQ))
+                keyConditions = mapOf(
+                    partKey to condition(listOf(atS("a")), EQ),
+                    "a" to condition(listOf(atS("a")), EQ)
+                )
             )
         }
         clearAfterException()
@@ -1284,7 +1290,7 @@ internal class AWSDynamoDBMockSelectTest : AWSDynamoDBMockTest() {
     fun `test invalid name of local secondary index`() {
         queryFailed<DynamoDbException> {
             localSecondaryIndexes = listOf(
-                localSecondaryIndex("hi", ProjectionType.KEYS_ONLY, emptyList(), "wow") to AttributeType.S
+                localSecondaryIndex("hi", ProjectionType.KEYS_ONLY, null, "wow") to AttributeType.S
             )
             query = query(
                 tableName = tableName,

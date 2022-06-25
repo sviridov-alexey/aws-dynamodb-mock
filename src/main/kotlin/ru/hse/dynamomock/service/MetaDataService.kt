@@ -1,4 +1,4 @@
-package ru.hse.dynamomock.model.utils
+package ru.hse.dynamomock.service
 
 import ru.hse.dynamomock.exception.dynamoException
 import ru.hse.dynamomock.exception.dynamoRequires

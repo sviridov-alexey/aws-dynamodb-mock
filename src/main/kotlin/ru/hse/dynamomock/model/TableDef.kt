@@ -100,6 +100,12 @@ private fun checkLocalSecondaryIndexes(
             "No defined key schema.  A key schema containing at least a hash key must be defined for all tables"
         }
 
+        if (it.projection().projectionType() in setOf(ProjectionType.KEYS_ONLY, ProjectionType.ALL)) {
+            dynamoRequires(it.projection().nonKeyAttributes().isNullOrEmpty()) {
+                "No attributes should be specified to be projected unless projection type is INCLUDE"
+            }
+        }
+
         checkKeySchema(it.keySchema())
 
         dynamoRequires(it.keySchema().size == 2) {
