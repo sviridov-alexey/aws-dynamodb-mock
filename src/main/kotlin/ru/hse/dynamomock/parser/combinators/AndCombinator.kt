@@ -34,7 +34,7 @@ internal infix fun <T, S> OrdinaryParser<T>.and(other: SkipCombinator<S>): AndCo
 internal operator fun <T, S> OrdinaryParser<T>.times(other: SkipCombinator<S>) = this and other
 
 internal infix fun <T, S> SkipCombinator<T>.and(other: SkipCombinator<S>): SkipCombinator<Pair<T, S>> =
-    SkipCombinator(AndCombinator(this, other) { x, y, -> x to y })
+    SkipCombinator(AndCombinator(this, other) { x, y -> x to y })
 
 internal operator fun <T, S> SkipCombinator<T>.times(other: SkipCombinator<S>) = this and other
 

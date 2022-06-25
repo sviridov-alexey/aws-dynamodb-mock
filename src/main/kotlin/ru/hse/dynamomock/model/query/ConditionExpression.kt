@@ -3,7 +3,6 @@ package ru.hse.dynamomock.model.query
 import ru.hse.dynamomock.exception.dynamoException
 import ru.hse.dynamomock.exception.dynamoRequires
 import ru.hse.dynamomock.model.AttributeTypeInfo
-import ru.hse.dynamomock.model.query.grammar.ConditionExpressionGrammar
 import ru.hse.dynamomock.model.query.ConditionExpression.Parameter
 import ru.hse.dynamomock.model.toAttributeTypeInfo
 import software.amazon.awssdk.services.dynamodb.model.*

@@ -1,14 +1,6 @@
 package ru.hse.dynamomock.model.query
 
-import ru.hse.dynamomock.exception.dynamoException
-import ru.hse.dynamomock.exception.dynamoRequires
-import ru.hse.dynamomock.model.TableMetadata
-import ru.hse.dynamomock.model.query.grammar.ProjectionExpressionGrammar
-import ru.hse.dynamomock.model.sortKey
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
-import software.amazon.awssdk.services.dynamodb.model.ProjectionType
-import software.amazon.awssdk.services.dynamodb.model.QueryRequest
-import software.amazon.awssdk.services.dynamodb.model.Select
 
 sealed interface QueryAttribute {
     fun retrieve(attributeValues: Map<String, AttributeValue>): AttributeValue?

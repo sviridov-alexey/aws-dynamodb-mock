@@ -3,7 +3,12 @@
 package ru.hse.dynamomock
 
 import ru.hse.dynamomock.db.ExposedStorage
+import ru.hse.dynamomock.model.TableMetadata
 import ru.hse.dynamomock.service.AWSDynamoDBMockService
+import ru.hse.dynamomock.service.DDLService
+import ru.hse.dynamomock.service.ImportExportService
+import ru.hse.dynamomock.service.ModifyDataService
+import ru.hse.dynamomock.service.RetrieveDataService
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.*
@@ -11,7 +16,19 @@ import java.util.concurrent.CompletableFuture
 import java.io.InputStream
 
 class AWSDynamoDBMock : DynamoDbClient {
-    private val service by lazy { AWSDynamoDBMockService(ExposedStorage()) }
+    private val service: AWSDynamoDBMockService
+
+    init {
+        val storage = ExposedStorage()
+        val tablesMetadata = mutableMapOf<String, TableMetadata>()
+        val ddlService = DDLService(storage, tablesMetadata)
+        val modifyDataService = ModifyDataService(storage, tablesMetadata)
+        val retrieveDataService = RetrieveDataService(storage, tablesMetadata)
+        val importExportService = ImportExportService(modifyDataService)
+        service = AWSDynamoDBMockService(
+            storage, ddlService, modifyDataService, retrieveDataService, importExportService
+        )
+    }
 
     override fun close() = service.close()
 
@@ -42,29 +59,20 @@ class AWSDynamoDBMock : DynamoDbClient {
 
     override fun scan(scanRequest: ScanRequest) = service.scan(scanRequest)
 
-    override fun putItem(putItemRequest: PutItemRequest): PutItemResponse {
-        return service.putItem(putItemRequest)
-    }
+    override fun putItem(putItemRequest: PutItemRequest) = service.putItem(putItemRequest)
 
-    override fun getItem(getItemRequest: GetItemRequest): GetItemResponse {
-        return service.getItem(getItemRequest)
-    }
+    override fun getItem(getItemRequest: GetItemRequest) = service.getItem(getItemRequest)
 
-    override fun deleteItem(deleteItemRequest: DeleteItemRequest): DeleteItemResponse {
-        return service.deleteItem(deleteItemRequest)
-    }
+    override fun deleteItem(deleteItemRequest: DeleteItemRequest) = service.deleteItem(deleteItemRequest)
 
-    override fun batchWriteItem(batchWriteItemRequest: BatchWriteItemRequest): BatchWriteItemResponse {
-        return service.batchWriteItem(batchWriteItemRequest)
-    }
+    override fun updateItem(updateItemRequest: UpdateItemRequest) = service.updateItem(updateItemRequest)
 
-    fun loadCSV(fileName: String, tableName: String) {
-        service.loadCSV(fileName, tableName)
-    }
+    override fun batchWriteItem(batchWriteItemRequest: BatchWriteItemRequest) =
+        service.batchWriteItem(batchWriteItemRequest)
 
-    fun loadCSV(inputStream: InputStream, tableName: String) {
-        service.loadCSV(inputStream, tableName)
-    }
+    fun loadCSV(fileName: String, tableName: String) = service.loadCSV(fileName, tableName)
+
+    fun loadCSV(inputStream: InputStream, tableName: String) = service.loadCSV(inputStream, tableName)
 
     companion object {
         private const val SERVICE_NAME = "dynamodb"
@@ -118,6 +126,12 @@ class AWSDynamoDBAsyncMock : DynamoDbAsyncClient {
         deleteItemRequest: DeleteItemRequest
     ): CompletableFuture<DeleteItemResponse> = CompletableFuture.supplyAsync {
         mock.deleteItem(deleteItemRequest)
+    }
+
+    override fun updateItem(
+        updateItemRequest: UpdateItemRequest
+    ): CompletableFuture<UpdateItemResponse> = CompletableFuture.supplyAsync {
+        mock.updateItem(updateItemRequest)
     }
 
     override fun batchWriteItem(

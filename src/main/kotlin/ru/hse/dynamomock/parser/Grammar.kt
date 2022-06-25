@@ -8,6 +8,7 @@ internal abstract class Grammar<T> {
     abstract val parser: OrdinaryParser<T>
 
     private val tokensAlphabet = mutableListOf<Token>()
+    protected val usedExpressionAttributeValues = mutableSetOf<String>()
 
     fun parse(input: CharSequence): T {
         val tokens = DefaultTokenizer(tokensAlphabet).tokenize(input).toList()
@@ -16,6 +17,8 @@ internal abstract class Grammar<T> {
             is FailedParse -> throw IllegalArgumentException(result.message)
         }
     }
+
+    fun getUsedExpressionAttributes() = usedExpressionAttributeValues
 
     protected operator fun <T : Token> T.provideDelegate(thisRef: Grammar<*>, property: KProperty<*>): T = apply {
         name = name ?: property.name

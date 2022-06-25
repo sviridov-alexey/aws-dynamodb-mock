@@ -5,11 +5,9 @@ import assertk.assertions.hasMessage
 import assertk.assertions.isFailure
 import org.junit.jupiter.api.Test
 import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition
-import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement
-import kotlin.test.assertEquals
 
 internal class AWSDynamoDBMockLoadCSVTest : AWSDynamoDBMockTest() {
     private val filesLocation = "src/test/resources/load-items/"
@@ -79,11 +77,11 @@ internal class AWSDynamoDBMockLoadCSVTest : AWSDynamoDBMockTest() {
         mock.loadCSV(filesLocation + "basic.csv", tableName)
 
         val item = mapOf(
-            "column1" to AttributeValue.builder().s("homecoming").build(),
-            "column3" to AttributeValue.builder().s("2017-07-06").build(),
-            "column2" to AttributeValue.builder().n("1").build(),
-            "column4" to AttributeValue.builder().bool(true).build(),
-            "column5" to AttributeValue.builder().nul(false).build()
+            "column1" to "homecoming".asDynamoStringValue(),
+            "column3" to "2017-07-06".asDynamoStringValue(),
+            "column2" to "1".asDynamoNumValue(),
+            "column4" to true.asDynamoBoolValue(),
+            "column5" to false.asDynamoNulValue()
         )
 
         val response = mock.getItem(
@@ -93,14 +91,14 @@ internal class AWSDynamoDBMockLoadCSVTest : AWSDynamoDBMockTest() {
                 .key(item.filter { it.key == "column1" || it.key == "column3" })
                 .build()
         )
-        assertEquals(item, response.item())
+        compareItems(item, response.item())
 
         val item2 = mapOf(
-            "column1" to AttributeValue.builder().s("far from home").build(),
-            "column3" to AttributeValue.builder().s("2019-07-04").build(),
-            "column2" to AttributeValue.builder().n("2").build(),
-            "column4" to AttributeValue.builder().bool(false).build(),
-            "column5" to AttributeValue.builder().nul(true).build()
+            "column1" to "far from home".asDynamoStringValue(),
+            "column3" to "2019-07-04".asDynamoStringValue(),
+            "column2" to "2".asDynamoNumValue(),
+            "column4" to false.asDynamoBoolValue(),
+            "column5" to true.asDynamoNulValue()
         )
 
         val response2 = mock.getItem(
@@ -110,7 +108,7 @@ internal class AWSDynamoDBMockLoadCSVTest : AWSDynamoDBMockTest() {
                 .key(item2.filter { it.key == "column1" || it.key == "column3" })
                 .build()
         )
-        assertEquals(item2, response2.item())
+        compareItems(item2, response2.item())
     }
 
     @Test
@@ -140,13 +138,9 @@ internal class AWSDynamoDBMockLoadCSVTest : AWSDynamoDBMockTest() {
         mock.loadCSV(filesLocation + "ss-ns-types.csv", tableName)
 
         val item = mapOf(
-            "column1" to AttributeValue.builder().s("captain america").build(),
-            "column2" to AttributeValue.builder()
-                .ss(listOf("the first avenger", "the winter soldier", "civil war"))
-                .build(),
-            "column3" to AttributeValue.builder()
-                .ns(listOf("1", "2", "3"))
-                .build()
+            "column1" to "captain america".asDynamoStringValue(),
+            "column2" to listOf("the first avenger", "the winter soldier", "civil war").asDynamoStrListValue(),
+            "column3" to listOf("1", "2", "3").asDynamoNumListValue()
         )
 
         val response = mock.getItem(
@@ -156,7 +150,7 @@ internal class AWSDynamoDBMockLoadCSVTest : AWSDynamoDBMockTest() {
                 .key(item.filter { it.key == "column1" })
                 .build()
         )
-        assertEquals(item, response.item())
+        compareItems(item, response.item())
     }
 
     @Test
@@ -185,24 +179,18 @@ internal class AWSDynamoDBMockLoadCSVTest : AWSDynamoDBMockTest() {
         mock.loadCSV(filesLocation + "l-m-types.csv", tableName)
 
         val item = mapOf(
-            "column1" to AttributeValue.builder().s("something").build(),
-            "column2" to AttributeValue.builder()
-                .l(
-                    listOf(
-                        AttributeValue.builder().s("Cookies").build(),
-                        AttributeValue.builder().s("Coffee").build(),
-                        AttributeValue.builder().n("3.14159").build()
-                    )
-                )
-                .build(),
-            "column3" to AttributeValue.builder()
-                .m(
-                    mapOf(
-                        "Name" to AttributeValue.builder().s("Joe").build(),
-                        "Age" to AttributeValue.builder().n("35").build()
-                    )
-                )
-                .build()
+            "column1" to "something".asDynamoStringValue(),
+            "column2" to
+                listOf(
+                    "Cookies".asDynamoStringValue(),
+                    "Coffee".asDynamoStringValue(),
+                    "3.14159".asDynamoNumValue()
+                ).asDynamoValue(),
+            "column3" to
+                mapOf(
+                    "Name" to "Joe".asDynamoStringValue(),
+                    "Age" to "35".asDynamoNumValue()
+                ).asDynamoValue()
         )
 
         val response = mock.getItem(
@@ -212,8 +200,6 @@ internal class AWSDynamoDBMockLoadCSVTest : AWSDynamoDBMockTest() {
                 .key(item.filter { it.key == "column1" })
                 .build()
         )
-        assertEquals(item, response.item())
-
+        compareItems(item, response.item())
     }
-
 }
